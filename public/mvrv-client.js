@@ -1,7 +1,7 @@
 // 서버(Vercel)에서 CoinMetrics 가 막힐 때, 브라우저가 직접 받아 MVRV-Z 시계열을 계산하는 대체 경로
-import { COINMETRICS_URL, MVRVZ_META, computeZSeries, fromHistoryStart, toTs } from "/zscore.js";
+import { COINMETRICS_URL, MVRVZ_META, computeZSeries, fromHistoryStart, toTs, usableRow } from "/zscore.js";
 
-const KEY = "mvrvzHistoryV1";
+const KEY = "mvrvzHistoryV2";
 const TTL = 6 * 3600 * 1000;
 
 function readCache() {
@@ -21,7 +21,7 @@ export async function clientMvrvzHistory() {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`CoinMetrics HTTP ${res.status}`);
     const d = await res.json();
-    rows.push(...(d.data ?? []).filter((r) => r.CapMrktCurUSD && r.CapRealUSD));
+    rows.push(...(d.data ?? []).filter(usableRow));
     url = d.next_page_url;
   }
   const points = fromHistoryStart(computeZSeries(rows).map((r) => [toTs(r.date), r.value]));

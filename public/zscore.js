@@ -7,6 +7,15 @@ export const fromHistoryStart = (points) => points.filter(([t]) => t >= HISTORY_
 
 export const toTs = (iso) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 1000;
 
+// CoinMetrics 무료 API 는 실현시가총액(CapRealUSD)을 막아두고 MVRV 비율(CapMVRVCur)만 준다.
+// 실현시가총액 = 시가총액 / MVRV 비율 로 역산한다. CapRealUSD 가 있으면 그 값을 쓴다.
+export function realizedCap(r) {
+  if (r.CapRealUSD !== undefined && r.CapRealUSD !== null) return Number(r.CapRealUSD);
+  return Number(r.CapMrktCurUSD) / Number(r.CapMVRVCur);
+}
+
+export const usableRow = (r) => Number(r.CapMrktCurUSD) > 0 && Number.isFinite(realizedCap(r)) && realizedCap(r) > 0;
+
 // MVRV-Z = (시가총액 - 실현시가총액) / 시가총액 표준편차(해당 시점까지의 전체 이력)
 // 날짜별 시계열 [{date, value}] 로 계산한다 (표준편차는 Welford 방식으로 누적).
 export function computeZSeries(rows) {
@@ -14,7 +23,7 @@ export function computeZSeries(rows) {
   let n = 0, mean = 0, m2 = 0;
   for (const r of rows) {
     const mc = Number(r.CapMrktCurUSD);
-    const rc = Number(r.CapRealUSD);
+    const rc = realizedCap(r);
     if (!Number.isFinite(mc) || !Number.isFinite(rc)) continue;
     n++;
     const d = mc - mean;
@@ -34,7 +43,7 @@ export function computeZ(rows) {
 
 export const COINMETRICS_URL =
   "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc" +
-  "&metrics=CapMrktCurUSD,CapRealUSD&frequency=1d&start_time=2010-07-18&page_size=10000";
+  "&metrics=CapMrktCurUSD,CapMVRVCur&frequency=1d&start_time=2010-07-18&page_size=10000";
 
 // 그래프 메타 (카드의 구간 정의와 같은 기준: 0 이하 저평가, 7 이상 극단적 과열)
 export const MVRVZ_META = {

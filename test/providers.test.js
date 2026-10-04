@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { calcPremium } from "../src/providers/kimchi.js";
 import { computeZ, computeZSeries, fromHistoryStart, loadMvrvzHistory } from "../src/providers/mvrvz.js";
+import { realizedCap } from "../public/zscore.js";
 import { getHistory, getIndicator, listIndicators } from "../src/api.js";
 
 test("김치프리미엄 계산", () => {
@@ -114,4 +115,13 @@ test("MVRV-Z 이력: bitcoin-data 가 2014년 이후부터만 있고 CoinMetrics
   } finally {
     globalThis.fetch = orig;
   }
+});
+
+test("실현시가총액은 CapRealUSD 가 없으면 시가총액 / MVRV 비율로 역산", () => {
+  assert.equal(realizedCap({ CapMrktCurUSD: "300", CapMVRVCur: "1.5" }), 200);
+  assert.equal(realizedCap({ CapMrktCurUSD: "300", CapRealUSD: "250", CapMVRVCur: "1.5" }), 250);
+  const rows = [100, 200, 300, 400].map((m, i) => ({ time: `2020-01-0${i + 1}T00:00:00Z`, CapMrktCurUSD: m, CapMVRVCur: m / 250 }));
+  const viaRatio = computeZSeries(rows).at(-1).value;
+  const viaCap = computeZSeries(rows.map((r) => ({ ...r, CapRealUSD: 250 }))).at(-1).value;
+  assert.ok(Math.abs(viaRatio - viaCap) < 1e-9);
 });

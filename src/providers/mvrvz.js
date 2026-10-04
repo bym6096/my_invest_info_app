@@ -1,5 +1,5 @@
 import { getJson, cached } from "../http.js";
-import { COINMETRICS_URL, HISTORY_FROM, MVRVZ_META, computeZ, computeZSeries, fromHistoryStart, toTs } from "../../public/zscore.js";
+import { COINMETRICS_URL, HISTORY_FROM, MVRVZ_META, computeZ, computeZSeries, fromHistoryStart, toTs, usableRow } from "../../public/zscore.js";
 
 export { computeZ, computeZSeries, fromHistoryStart };
 
@@ -19,7 +19,7 @@ async function coinMetricsRows() {
   let url = COINMETRICS_URL;
   for (let i = 0; url && i < 5; i++) {
     const d = await getJson(url, { timeoutMs: 20000, headers: CM_HEADERS });
-    rows.push(...(d.data ?? []).filter((r) => r.CapMrktCurUSD && r.CapRealUSD));
+    rows.push(...(d.data ?? []).filter(usableRow));
     url = d.next_page_url;
   }
   return rows;

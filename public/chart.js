@@ -62,6 +62,7 @@ async function fetchHistory(id) {
       data = await fallback();
     } catch (e) {
       if (!data) throw new Error(`${serverErr.message} / 브라우저: ${e.message}`);
+      data = { ...data, note: `전체 기간 불러오기 실패 (브라우저: ${e.message})` };
     }
   }
   if (!data) throw serverErr;
@@ -224,6 +225,9 @@ export function createChart(meta) {
     const fmt = (v) => v.toFixed(dec);
     const minV = Math.min(...pts.map((p) => p[1])), maxV = Math.max(...pts.map((p) => p[1]));
     stats.textContent = `구간 최저 ${fmt(minV)} · 최고 ${fmt(maxV)} · 현재 ${fmt(last[1])}`;
+    const src = document.createElement("div");
+    src.textContent = [`이력 출처: ${data.source}`, `${fmtDate(all[0][0])}부터`, data.note].filter(Boolean).join(" · ");
+    stats.append(src);
   }
 
   document.addEventListener("chart-range", draw);
