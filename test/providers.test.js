@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcPremium } from "../src/providers/kimchi.js";
+import { calcPremium, usdKrw } from "../src/providers/kimchi.js";
 import { computeZ, computeZSeries, fromHistoryStart, loadMvrvzHistory } from "../src/providers/mvrvz.js";
 import { realizedCap } from "../public/zscore.js";
 import { getHistory, getIndicator, listIndicators } from "../src/api.js";
@@ -124,4 +124,40 @@ test("실현시가총액은 CapRealUSD 가 없으면 시가총액 / MVRV 비율�
   const viaRatio = computeZSeries(rows).at(-1).value;
   const viaCap = computeZSeries(rows.map((r) => ({ ...r, CapRealUSD: 250 }))).at(-1).value;
   assert.ok(Math.abs(viaRatio - viaCap) < 1e-9);
+});
+
+function mockFetch(routes) {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const hit = Object.entries(routes).find(([k]) => String(url).includes(k));
+    if (!hit || hit[1] === null) return { ok: false, status: 500 };
+    return { ok: true, json: async () => hit[1] };
+  };
+  return () => { globalThis.fetch = orig; };
+}
+
+test("환율: 두나무 외환을 1순위로 사용", async () => {
+  const restore = mockFetch({ "dunamu.com": [{ basePrice: 1350.5, timestamp: 1759500000000 }], "exchangerate.fun": { rates: { KRW: 1300 } } });
+  try {
+    const r = await usdKrw();
+    assert.equal(r.rate, 1350.5);
+    assert.match(r.source, /Dunamu/);
+    assert.equal(r.asOf, new Date(1759500000000).toISOString());
+  } finally { restore(); }
+});
+
+test("환율: 1순위 실패/이상값이면 다음 소스로 폴백", async () => {
+  const restore = mockFetch({ "dunamu.com": [{ basePrice: 0 }], "exchangerate.fun": { timestamp: 1759500000, rates: { KRW: 1349.9 } } });
+  try {
+    const r = await usdKrw();
+    assert.equal(r.rate, 1349.9);
+    assert.equal(r.source, "exchangerate.fun");
+  } finally { restore(); }
+});
+
+test("환율: 모든 소스 실패 시 사유를 모아서 오류", async () => {
+  const restore = mockFetch({});
+  try {
+    await assert.rejects(usdKrw(), /Dunamu.*exchangerate\.fun.*open\.er-api.*frankfurter/s);
+  } finally { restore(); }
 });
