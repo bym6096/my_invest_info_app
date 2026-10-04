@@ -1,0 +1,24 @@
+:root{--bg:#f5f6f8;--card:#fff;--text:#1a1d23;--muted:#6b7280;--border:#e5e7eb;
+--blue:#3b82f6;--green:#16a34a;--lime:#84cc16;--yellow:#eab308;--orange:#f97316;--red:#dc2626}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--text:#e8eaed;--muted:#9aa0a6;--border:#2a2e36}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Noto Sans KR",sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px;max-width:960px;margin:0 auto;flex-wrap:wrap}
+h1{font-size:1.25rem;margin:0}
+#status{color:var(--muted);font-size:.85rem;margin-right:8px}
+button{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:0 16px 32px;max-width:960px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.card h2{font-size:.95rem;color:var(--muted);margin:0 0 8px;font-weight:600}
+.value{font-size:2.4rem;font-weight:700;line-height:1.1}
+.badge{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:999px;color:#fff;font-size:.85rem;font-weight:600}
+.bar{position:relative;height:8px;border-radius:4px;background:var(--border);margin:16px 0 8px}
+.bar i{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:var(--text)}
+dl{margin:12px 0 0;font-size:.85rem}
+dl div{display:flex;justify-content:space-between;padding:2px 0}
+dt{color:var(--muted)}dd{margin:0}
+.foot{margin-top:12px;font-size:.75rem;color:var(--muted)}
+.err{color:var(--red);font-size:.9rem}
+.stale{color:var(--orange)}
+.tone-blue{background:var(--blue)}.tone-green{background:var(--green)}.tone-lime{background:var(--lime)}
+.tone-yellow{background:var(--yellow)}.tone-orange{background:var(--orange)}.tone-red{background:var(--red)}

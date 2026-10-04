@@ -1,0 +1,12 @@
+{
+  "name": "my-invest-info-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "개인 투자 지표 대시보드 (김치프리미엄, MVRV-Z, 공포탐욕지수)",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
