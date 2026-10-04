@@ -13,5 +13,14 @@ npm start      # http://localhost:3000
 npm test
 ```
 
+## Vercel 배포 (서울 리전)
+1. vercel.com에 GitHub로 가입 → Add New → Project → 이 저장소 Import
+2. Framework Preset은 `Other`, Build/Output 설정은 비워둔다 (`public/`은 정적 파일로, `api/`는 서버리스 함수로 자동 인식)
+3. 함수 실행 지역은 `vercel.json`의 `regions: ["icn1"]`(서울)로 고정되어 있다
+4. 배포 후 `https://<프로젝트>.vercel.app` 를 열면 된다
+
+API: `GET /api/indicators`(목록), `GET /api/indicators/<id>`(지표별). 응답은 `s-maxage`로 CDN 캐시된다.
+`npm start`로 로컬에서도 같은 API가 동작한다.
+
 ## 지표 추가
 `src/providers/`에 `{id, title, value, unit, decimals, zones, ...}`를 반환하는 함수를 만들고 `src/providers/index.js`에 한 줄 추가하면 카드가 자동으로 생긴다. 지표별 실패는 격리되어 다른 카드에 영향을 주지 않는다.

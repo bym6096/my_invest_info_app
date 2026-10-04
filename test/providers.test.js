@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { calcPremium } from "../src/providers/kimchi.js";
 import { computeZ } from "../src/providers/mvrvz.js";
-import { loadAll } from "../src/server.js";
+import { getIndicator, listIndicators } from "../src/api.js";
 
 test("김치프리미엄 계산", () => {
   assert.equal(calcPremium(1400, 1400), 0);
@@ -18,8 +18,37 @@ test("MVRV-Z 계산: (최종 시총 - 실현시총) / 시총 표준편차", () =
   assert.equal(date, "2020-01-04");
 });
 
-test("지표 하나가 실패해도 나머지는 반환 (네트워크 불가 환경: 전부 error 객체)", async () => {
-  const list = await loadAll();
-  assert.equal(list.length, 3);
-  for (const i of list) assert.ok(i.id && (i.error || i.value !== undefined));
+test("지표 목록과 알 수 없는 id 처리", async () => {
+  assert.deepEqual(listIndicators().body.map((x) => x.id), ["kimchi", "mvrvz", "fng"]);
+  const r = await getIndicator("nope");
+  assert.equal(r.status, 404);
+});
+
+test("외부 API 실패는 502 + no-store 로 격리", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 500 });
+  try {
+    const r = await getIndicator("fng");
+    assert.equal(r.status, 502);
+    assert.equal(r.headers["cache-control"], "no-store");
+    assert.ok(r.body.error);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test("성공 시 CDN 캐시 헤더 (mock)", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ data: [{ value: "30", value_classification: "Fear", timestamp: "1700000000" }] }),
+  });
+  try {
+    const r = await getIndicator("fng");
+    assert.equal(r.status, 200);
+    assert.equal(r.body.value, 30);
+    assert.match(r.headers["cache-control"], /s-maxage=300/);
+  } finally {
+    globalThis.fetch = orig;
+  }
 });

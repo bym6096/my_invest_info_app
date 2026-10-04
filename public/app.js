@@ -1,4 +1,3 @@
-const TITLES = { kimchi: "김치프리미엄 (USDT)", mvrvz: "BTC MVRV Z-Score", fng: "Crypto Fear & Greed Index" };
 const $ = (id) => document.getElementById(id);
 
 function zoneOf(ind) {
@@ -14,7 +13,7 @@ function el(tag, cls, text) {
 
 function renderCard(ind) {
   const card = el("section", "card");
-  card.append(el("h2", "", ind.title ?? TITLES[ind.id] ?? ind.id));
+  card.append(el("h2", "", ind.title ?? ind.id));
   if (ind.error) {
     card.append(el("div", "err", `불러오기 실패: ${ind.error}`));
     return card;
@@ -45,12 +44,28 @@ function renderCard(ind) {
   return card;
 }
 
+// 지표별로 따로 요청해서, 느린 지표(MVRV-Z)가 다른 카드를 막지 않게 한다.
+async function loadOne(meta, slot) {
+  try {
+    const res = await fetch(`/api/indicators/${meta.id}`);
+    const ind = await res.json();
+    slot.replaceWith(renderCard({ title: meta.title, ...ind }));
+  } catch (e) {
+    slot.replaceWith(renderCard({ ...meta, error: e.message }));
+  }
+}
+
 async function load() {
   $("status").textContent = "불러오는 중…";
   try {
-    const res = await fetch("/api/indicators");
-    const list = await res.json();
-    $("cards").replaceChildren(...list.map(renderCard));
+    const metas = await (await fetch("/api/indicators")).json();
+    const slots = metas.map((m) => {
+      const c = el("section", "card");
+      c.append(el("h2", "", m.title), el("div", "foot", "불러오는 중…"));
+      return c;
+    });
+    $("cards").replaceChildren(...slots);
+    await Promise.all(metas.map((m, i) => loadOne(m, slots[i])));
     $("status").textContent = `업데이트 ${new Date().toLocaleTimeString("ko-KR")}`;
   } catch (e) {
     $("status").textContent = `서버 연결 실패: ${e.message}`;
