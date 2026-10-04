@@ -22,5 +22,9 @@ npm test
 API: `GET /api/indicators`(목록), `GET /api/indicators/<id>`(지표별). 응답은 `s-maxage`로 CDN 캐시된다.
 `npm start`로 로컬에서도 같은 API가 동작한다.
 
+## 앱으로 설치 (PWA)
+배포된 주소를 안드로이드 크롬에서 열고 메뉴 → "앱 설치"(또는 "홈 화면에 추가"). 아이콘은 `node scripts/make-icons.mjs`로 다시 만들 수 있다.
+서비스 워커(`public/sw.js`)가 화면은 캐시 우선, API는 네트워크 우선으로 처리하고 오프라인이면 마지막 값을 "이전 값"으로 표시한다. `sw.js`를 바꿀 때는 `CACHE` 이름의 버전을 올린다.
+
 ## 지표 추가
 `src/providers/`에 `{id, title, value, unit, decimals, zones, ...}`를 반환하는 함수를 만들고 `src/providers/index.js`에 한 줄 추가하면 카드가 자동으로 생긴다. 지표별 실패는 격리되어 다른 카드에 영향을 주지 않는다.

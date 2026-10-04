@@ -49,6 +49,8 @@ async function loadOne(meta, slot) {
   try {
     const res = await fetch(`/api/indicators/${meta.id}`);
     const ind = await res.json();
+    // 서비스 워커가 오프라인 캐시로 응답했으면 이전 값임을 표시
+    if (res.headers.get("x-offline-cache")) ind.stale = true;
     slot.replaceWith(renderCard({ title: meta.title, ...ind }));
   } catch (e) {
     slot.replaceWith(renderCard({ ...meta, error: e.message }));
@@ -75,3 +77,7 @@ async function load() {
 $("refresh").addEventListener("click", load);
 load();
 setInterval(load, 60_000);
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}

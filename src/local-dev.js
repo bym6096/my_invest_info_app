@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { getIndicator, listIndicators } from "./api.js";
 
 const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
-const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json" };
 
 export function createApp() {
   return createServer(async (req, res) => {
