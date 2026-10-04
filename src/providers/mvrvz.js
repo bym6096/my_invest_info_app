@@ -71,7 +71,7 @@ export async function mvrvz() {
     details: [{ label: "기준일", value: r.date ?? "-" }],
     // 통상 해석: 7 이상 고점권, 0 이하 저점권
     zones: [
-      { max: 0, label: "저평가 (바닥권)", tone: "green" },
+      { max: 0, label: "저평가 (바닥권)", tone: "blue" },
       { max: 3, label: "중립", tone: "yellow" },
       { max: 7, label: "과열 주의", tone: "orange" },
       { max: null, label: "극단적 과열 (고점권)", tone: "red" },
@@ -101,7 +101,7 @@ async function historyFromCoinMetrics() {
 
 // 그래프에 색을 씌울 구간 (카드의 구간 정의와 같은 기준: 0 이하 저평가, 7 이상 극단적 과열)
 const BANDS = [
-  { to: 0, tone: "green", label: "저평가" },
+  { to: 0, tone: "blue", label: "저평가" },
   { from: 7, tone: "red", label: "과열" },
 ];
 

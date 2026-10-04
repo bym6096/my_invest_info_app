@@ -24,11 +24,11 @@ export async function fng() {
       ...(prev ? [{ label: "전일", value: String(Number(prev.value)) }] : []),
     ],
     zones: [
-      { max: 25, label: "극단적 공포", tone: "red" },
-      { max: 45, label: "공포", tone: "orange" },
+      { max: 25, label: "극단적 공포", tone: "blue" },
+      { max: 45, label: "공포", tone: "sky" },
       { max: 55, label: "중립", tone: "yellow" },
-      { max: 75, label: "탐욕", tone: "lime" },
-      { max: null, label: "극단적 탐욕", tone: "green" },
+      { max: 75, label: "탐욕", tone: "orange" },
+      { max: null, label: "극단적 탐욕", tone: "red" },
     ],
     range: [0, 100],
     source: "alternative.me",
@@ -37,10 +37,10 @@ export async function fng() {
   };
 }
 
-// 그래프에 색을 씌울 구간 (카드의 구간 색과 동일: 25 이하 극단적 공포, 75 초과 극단적 탐욕)
+// 그래프에 색을 씌울 구간 (카드의 구간 색과 동일: 차가운 색=공포/침체, 뜨거운 색=탐욕/과열)
 const BANDS = [
-  { to: 25, tone: "red", label: "극단적 공포" },
-  { from: 75, tone: "green", label: "극단적 탐욕" },
+  { to: 25, tone: "blue", label: "극단적 공포" },
+  { from: 75, tone: "red", label: "극단적 탐욕" },
 ];
 
 // 전체 이력(2018~). alternative.me 는 최신순으로 주므로 뒤집는다.
