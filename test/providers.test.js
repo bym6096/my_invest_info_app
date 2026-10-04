@@ -75,6 +75,7 @@ test("공포탐욕 시계열: 오름차순 정렬, kimchi 는 시계열 없음",
     assert.deepEqual(r.body.points, [[100, 20], [200, 50]]);
     assert.match(r.headers["cache-control"], /s-maxage=900/);
     assert.equal((await getHistory("kimchi")).status, 404);
+    assert.deepEqual(r.body.bands.map((b) => b.label), ["극단적 공포", "극단적 탐욕"]);
   } finally {
     globalThis.fetch = orig;
   }

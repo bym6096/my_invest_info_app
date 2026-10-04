@@ -99,6 +99,12 @@ async function historyFromCoinMetrics() {
   return { points: series.map((r) => [toTs(r.date), r.value]), source: "CoinMetrics (직접 계산)" };
 }
 
+// 그래프에 색을 씌울 구간 (카드의 구간 정의와 같은 기준: 0 이하 저평가, 7 이상 극단적 과열)
+const BANDS = [
+  { to: 0, tone: "green", label: "저평가" },
+  { from: 7, tone: "red", label: "과열" },
+];
+
 export async function mvrvzHistory() {
   const r = await cached("mvrvz-history", 60 * 60_000, async () => {
     try {
@@ -107,5 +113,5 @@ export async function mvrvzHistory() {
       return await historyFromCoinMetrics();
     }
   });
-  return { id: "mvrvz", decimals: 2, refs: [0, 3, 7], points: r.points, source: r.source, stale: r.stale };
+  return { id: "mvrvz", decimals: 2, refs: [0, 3, 7], bands: BANDS, points: r.points, source: r.source, stale: r.stale };
 }

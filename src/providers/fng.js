@@ -37,6 +37,12 @@ export async function fng() {
   };
 }
 
+// 그래프에 색을 씌울 구간 (카드의 구간 색과 동일: 25 이하 극단적 공포, 75 초과 극단적 탐욕)
+const BANDS = [
+  { to: 25, tone: "red", label: "극단적 공포" },
+  { from: 75, tone: "green", label: "극단적 탐욕" },
+];
+
 // 전체 이력(2018~). alternative.me 는 최신순으로 주므로 뒤집는다.
 export async function fngHistory() {
   const d = await cached("fng-history", 30 * 60_000, () => getJson("https://api.alternative.me/fng/?limit=0"));
@@ -45,5 +51,5 @@ export async function fngHistory() {
     .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
     .sort((a, b) => a[0] - b[0]);
   if (!points.length) throw new Error("공포탐욕지수 이력 없음");
-  return { id: "fng", decimals: 0, refs: [25, 75], points, source: "alternative.me", stale: d.stale };
+  return { id: "fng", decimals: 0, refs: [25, 75], bands: BANDS, points, source: "alternative.me", stale: d.stale };
 }

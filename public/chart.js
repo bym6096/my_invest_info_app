@@ -108,6 +108,20 @@ export function createChart(meta) {
       "aria-label": `${meta.title} 추이, ${fmtDate(t0)}부터 ${fmtDate(t1)}까지` });
     svg.style.touchAction = "pan-y";
 
+    // 구간 색칠(과열/침체 등): 현재 보이는 범위와 겹칠 때만 그린다. 가장 아래에 깔리도록 먼저 추가.
+    for (const bd of data.bands ?? []) {
+      const top = Math.min(bd.to ?? Infinity, hi), bottom = Math.max(bd.from ?? -Infinity, lo);
+      if (top <= bottom) continue;
+      const y0 = y(top), y1 = y(bottom);
+      svg.append(svgEl("rect", { x: m.l, y: y0, width: W - m.l - m.r, height: y1 - y0, class: `band t-${bd.tone}` }));
+      if (y1 - y0 >= 18) {
+        const atTop = bd.from !== undefined; // 위쪽 구간은 위쪽 가장자리, 아래쪽 구간은 아래쪽 가장자리에 라벨
+        const t = svgEl("text", { x: m.l + 6, y: atTop ? y0 + 12 : y1 - 6, class: "band-label" });
+        t.textContent = bd.label;
+        svg.append(t);
+      }
+    }
+
     const { ticks, step } = niceTicks(lo, hi);
     const yFmt = (v) => v.toFixed(step < 1 ? (step < 0.5 ? 2 : 1) : 0);
     for (const v of ticks) {
