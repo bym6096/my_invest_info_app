@@ -14,16 +14,19 @@ function el(tag, cls, text) {
 }
 
 function renderCard(ind, chart) {
-  const card = el("section", "card");
-  card.append(el("h2", "", ind.title ?? ind.id));
+  const card = el("section", chart ? "card has-chart" : "card");
+  const summary = el("div", "summary");
+  card.append(summary);
+  summary.append(el("h2", "", ind.title ?? ind.id));
   if (ind.error) {
-    card.append(el("div", "err", `불러오기 실패: ${ind.error}`));
+    summary.append(el("div", "err", `불러오기 실패: ${ind.error}`));
     return card;
   }
   const zone = zoneOf(ind);
   const sign = ind.unit === "%" && ind.value > 0 ? "+" : "";
-  card.append(el("div", "value", `${sign}${ind.value.toFixed(ind.decimals)}${ind.unit}`));
-  card.append(el("span", `badge tone-${zone.tone}`, zone.label));
+  const main = el("div", "main");
+  main.append(el("div", "value", `${sign}${ind.value.toFixed(ind.decimals)}${ind.unit}`));
+  main.append(el("span", `badge tone-${zone.tone}`, zone.label));
   if (ind.range) {
     const [lo, hi] = ind.range;
     const pct = Math.min(100, Math.max(0, ((ind.value - lo) / (hi - lo)) * 100));
@@ -31,19 +34,20 @@ function renderCard(ind, chart) {
     const mark = el("i");
     mark.style.left = `calc(${pct}% - 2px)`;
     bar.append(mark);
-    card.append(bar);
+    main.append(bar);
   }
+  summary.append(main);
   const dl = el("dl");
   for (const d of ind.details ?? []) {
     const row = el("div");
     row.append(el("dt", "", d.label), el("dd", "", d.value));
     dl.append(row);
   }
-  card.append(dl);
-  if (chart) card.append(chart);
+  summary.append(dl);
   const foot = el("div", "foot", `출처: ${ind.source}`);
   if (ind.stale) foot.append(el("span", "stale", " · 최신 갱신 실패, 이전 값 표시 중"));
-  card.append(foot);
+  summary.append(foot);
+  if (chart) card.append(chart);
   return card;
 }
 

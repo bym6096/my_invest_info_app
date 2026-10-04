@@ -93,7 +93,7 @@ export function createChart(meta) {
       return;
     }
     const W = Math.max(240, plot.clientWidth || root.clientWidth || 300);
-    const H = 190;
+    const H = W >= 560 ? 280 : 190; // 넓은 화면에서는 세로도 키워 추세가 잘 보이게
     const m = { l: 36, r: 10, t: 10, b: 22 };
     const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
     let lo = Infinity, hi = -Infinity;
