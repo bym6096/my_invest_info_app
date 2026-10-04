@@ -8,19 +8,34 @@ async function fromBitcoinData() {
   return { value, date: d.d, source: "bitcoin-data.com" };
 }
 
-// MVRV-Z = (시가총액 - 실현시가총액) / 시가총액 표준편차(전체 이력)
-export function computeZ(rows) {
-  const mc = rows.map((r) => Number(r.CapMrktCurUSD));
-  const last = rows[rows.length - 1];
-  const rc = Number(last.CapRealUSD);
-  if (!mc.length || !Number.isFinite(rc)) throw new Error("CoinMetrics 데이터 부족");
-  const mean = mc.reduce((a, b) => a + b, 0) / mc.length;
-  const std = Math.sqrt(mc.reduce((a, b) => a + (b - mean) ** 2, 0) / mc.length);
-  return { value: (mc[mc.length - 1] - rc) / std, date: last.time.slice(0, 10) };
+const toTs = (iso) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 1000;
+
+// MVRV-Z = (시가총액 - 실현시가총액) / 시가총액 표준편차(해당 시점까지의 전체 이력)
+// 날짜별 시계열 [{date, value}] 로 계산한다 (표준편차는 Welford 방식으로 누적).
+export function computeZSeries(rows) {
+  const out = [];
+  let n = 0, mean = 0, m2 = 0;
+  for (const r of rows) {
+    const mc = Number(r.CapMrktCurUSD);
+    const rc = Number(r.CapRealUSD);
+    if (!Number.isFinite(mc) || !Number.isFinite(rc)) continue;
+    n++;
+    const d = mc - mean;
+    mean += d / n;
+    m2 += d * (mc - mean);
+    const std = Math.sqrt(m2 / n);
+    if (std > 0) out.push({ date: r.time.slice(0, 10), value: (mc - rc) / std });
+  }
+  return out;
 }
 
-// 2차: CoinMetrics 커뮤니티 API 원데이터로 직접 계산
-async function fromCoinMetrics() {
+export function computeZ(rows) {
+  const series = computeZSeries(rows);
+  if (!series.length) throw new Error("CoinMetrics 데이터 부족");
+  return series[series.length - 1];
+}
+
+async function coinMetricsRows() {
   const rows = [];
   let url =
     "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc" +
@@ -30,7 +45,12 @@ async function fromCoinMetrics() {
     rows.push(...(d.data ?? []).filter((r) => r.CapMrktCurUSD && r.CapRealUSD));
     url = d.next_page_url;
   }
-  const z = computeZ(rows);
+  return rows;
+}
+
+// 2차: CoinMetrics 커뮤니티 API 원데이터로 직접 계산
+async function fromCoinMetrics() {
+  const z = computeZ(await coinMetricsRows());
   return { ...z, source: "CoinMetrics (직접 계산)" };
 }
 
@@ -61,4 +81,31 @@ export async function mvrvz() {
     updatedAt: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
     stale: r.stale,
   };
+}
+
+// 시계열: bitcoin-data.com 전체 이력 → 실패 시 CoinMetrics로 계산. points = [[unixSec, value], ...]
+async function historyFromBitcoinData() {
+  const rows = await getJson("https://bitcoin-data.com/v1/mvrv-zscore", { timeoutMs: 20000 });
+  const points = (Array.isArray(rows) ? rows : [])
+    .map((r) => [Number(r.unixTs) || toTs(String(r.d)), Number(r.mvrvZscore)])
+    .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
+    .sort((a, b) => a[0] - b[0]);
+  if (points.length < 100) throw new Error("bitcoin-data 시계열 데이터 부족");
+  return { points, source: "bitcoin-data.com" };
+}
+
+async function historyFromCoinMetrics() {
+  const series = computeZSeries(await coinMetricsRows());
+  return { points: series.map((r) => [toTs(r.date), r.value]), source: "CoinMetrics (직접 계산)" };
+}
+
+export async function mvrvzHistory() {
+  const r = await cached("mvrvz-history", 60 * 60_000, async () => {
+    try {
+      return await historyFromBitcoinData();
+    } catch {
+      return await historyFromCoinMetrics();
+    }
+  });
+  return { id: "mvrvz", decimals: 2, refs: [0, 3, 7], points: r.points, source: r.source, stale: r.stale };
 }

@@ -1,6 +1,6 @@
-// 앱 셸은 캐시 우선(+백그라운드 갱신), API는 네트워크 우선(오프라인이면 마지막 값).
-const CACHE = "invest-v1";
-const SHELL = ["/", "/style.css", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png"];
+// 온라인이면 항상 최신(네트워크 우선), 오프라인이면 마지막으로 캐시된 화면/값을 사용.
+const CACHE = "invest-v2";
+const SHELL = ["/", "/style.css", "/app.js", "/chart.js", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -29,19 +29,9 @@ async function networkFirst(req) {
   }
 }
 
-async function staleWhileRevalidate(req) {
-  const cache = await caches.open(CACHE);
-  const hit = await cache.match(req);
-  const refresh = fetch(req).then((res) => {
-    if (res.ok) cache.put(req, res.clone());
-    return res;
-  });
-  return hit ?? refresh;
-}
-
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== location.origin) return;
-  e.respondWith(url.pathname.startsWith("/api/") ? networkFirst(req) : staleWhileRevalidate(req));
+  e.respondWith(networkFirst(req));
 });

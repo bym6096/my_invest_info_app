@@ -1,3 +1,5 @@
+import { createChart } from "/chart.js";
+
 const $ = (id) => document.getElementById(id);
 
 function zoneOf(ind) {
@@ -11,7 +13,7 @@ function el(tag, cls, text) {
   return e;
 }
 
-function renderCard(ind) {
+function renderCard(ind, chart) {
   const card = el("section", "card");
   card.append(el("h2", "", ind.title ?? ind.id));
   if (ind.error) {
@@ -38,6 +40,7 @@ function renderCard(ind) {
     dl.append(row);
   }
   card.append(dl);
+  if (chart) card.append(chart);
   const foot = el("div", "foot", `출처: ${ind.source}`);
   if (ind.stale) foot.append(el("span", "stale", " · 최신 갱신 실패, 이전 값 표시 중"));
   card.append(foot);
@@ -51,7 +54,7 @@ async function loadOne(meta, slot) {
     const ind = await res.json();
     // 서비스 워커가 오프라인 캐시로 응답했으면 이전 값임을 표시
     if (res.headers.get("x-offline-cache")) ind.stale = true;
-    slot.replaceWith(renderCard({ title: meta.title, ...ind }));
+    slot.replaceWith(renderCard({ title: meta.title, ...ind }, meta.history ? createChart(meta) : null));
   } catch (e) {
     slot.replaceWith(renderCard({ ...meta, error: e.message }));
   }

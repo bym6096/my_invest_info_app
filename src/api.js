@@ -7,7 +7,7 @@ export function listIndicators() {
   return {
     status: 200,
     headers: { ...JSON_HEADERS, "cache-control": "public, max-age=0, s-maxage=3600" },
-    body: providers.map(({ id, title }) => ({ id, title })),
+    body: providers.map(({ id, title, history }) => ({ id, title, history: Boolean(history) })),
   };
 }
 
@@ -24,6 +24,22 @@ export async function getIndicator(id) {
       status: 502,
       headers: { ...JSON_HEADERS, "cache-control": "no-store" },
       body: { id, title: p.title, error: err?.message ?? String(err) },
+    };
+  }
+}
+
+export async function getHistory(id) {
+  const p = providers.find((x) => x.id === id);
+  if (!p?.history) return { status: 404, headers: JSON_HEADERS, body: { id, error: "시계열 없음" } };
+  try {
+    const body = await p.history();
+    const cc = `public, max-age=0, s-maxage=${p.historyTtl}, stale-while-revalidate=${p.historyTtl * 6}`;
+    return { status: 200, headers: { ...JSON_HEADERS, "cache-control": cc }, body };
+  } catch (err) {
+    return {
+      status: 502,
+      headers: { ...JSON_HEADERS, "cache-control": "no-store" },
+      body: { id, error: err?.message ?? String(err) },
     };
   }
 }

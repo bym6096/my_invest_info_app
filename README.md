@@ -19,7 +19,7 @@ npm test
 3. 함수 실행 지역은 `vercel.json`의 `regions: ["icn1"]`(서울)로 고정되어 있다
 4. 배포 후 `https://<프로젝트>.vercel.app` 를 열면 된다
 
-API: `GET /api/indicators`(목록), `GET /api/indicators/<id>`(지표별). 응답은 `s-maxage`로 CDN 캐시된다.
+API: `GET /api/indicators`(목록), `GET /api/indicators/<id>`(지표별), `GET /api/history/<id>`(시계열, MVRV-Z·공포탐욕만). 응답은 `s-maxage`로 CDN 캐시된다.
 `npm start`로 로컬에서도 같은 API가 동작한다.
 
 ## 앱으로 설치 (PWA)
