@@ -1,4 +1,6 @@
 // 의존성 없는 SVG 라인 차트 (단일 시리즈). createChart(meta) → DOM 요소
+import { clientMvrvzHistory } from "/mvrv-client.js";
+
 const RANGES = [
   { key: "1m", label: "1개월", days: 30 },
   { key: "1y", label: "1년", days: 365 },
@@ -35,12 +37,34 @@ function fmtAxisDate(ts, spanDays) {
   return String(d.getUTCFullYear());
 }
 
-async function fetchHistory(id) {
-  const hit = histCache.get(id);
-  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.data;
+// 서버가 실패했거나 데이터가 짧을 때(partial) 브라우저에서 직접 계산하는 대체 경로
+const CLIENT_FALLBACKS = { mvrvz: clientMvrvzHistory };
+
+async function fetchFromServer(id) {
   const res = await fetch(`/api/history/${id}`);
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+async function fetchHistory(id) {
+  const hit = histCache.get(id);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.data;
+  let data = null, serverErr = null;
+  try {
+    data = await fetchFromServer(id);
+  } catch (e) {
+    serverErr = e;
+  }
+  const fallback = CLIENT_FALLBACKS[id];
+  if (fallback && (!data || data.partial)) {
+    try {
+      data = await fallback();
+    } catch (e) {
+      if (!data) throw new Error(`${serverErr.message} / 브라우저: ${e.message}`);
+    }
+  }
+  if (!data) throw serverErr;
   histCache.set(id, { at: Date.now(), data });
   return data;
 }
