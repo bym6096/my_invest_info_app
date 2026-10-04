@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { calcPremium } from "../src/providers/kimchi.js";
-import { computeZ, computeZSeries } from "../src/providers/mvrvz.js";
+import { computeZ, computeZSeries, fromHistoryStart } from "../src/providers/mvrvz.js";
 import { getHistory, getIndicator, listIndicators } from "../src/api.js";
 
 test("김치프리미엄 계산", () => {
@@ -84,4 +84,10 @@ test("공포탐욕 시계열: 오름차순 정렬, kimchi 는 시계열 없음",
 test("목록에 history 플래그 포함", () => {
   const m = Object.fromEntries(listIndicators().body.map((x) => [x.id, x.history]));
   assert.deepEqual(m, { kimchi: false, mvrvz: true, fng: true });
+});
+
+test("MVRV-Z 시계열은 2014-01-01부터만 표시", () => {
+  const ts = (d) => Date.parse(`${d}T00:00:00Z`) / 1000;
+  const pts = [[ts("2013-12-31"), 9], [ts("2014-01-01"), 5], [ts("2020-01-01"), 2]];
+  assert.deepEqual(fromHistoryStart(pts).map((p) => p[1]), [5, 2]);
 });

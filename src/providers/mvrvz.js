@@ -8,6 +8,11 @@ async function fromBitcoinData() {
   return { value, date: d.d, source: "bitcoin-data.com" };
 }
 
+// 그래프는 2014-01-01부터 보여준다 (그 이전은 값이 극단적으로 튀어 스케일을 망친다).
+// 표준편차는 가장 이른 데이터부터 누적한 값을 쓰고, 표시할 때만 자른다.
+const HISTORY_FROM = Date.UTC(2014, 0, 1) / 1000;
+export const fromHistoryStart = (points) => points.filter(([t]) => t >= HISTORY_FROM);
+
 const toTs = (iso) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 1000;
 
 // MVRV-Z = (시가총액 - 실현시가총액) / 시가총액 표준편차(해당 시점까지의 전체 이력)
@@ -39,7 +44,7 @@ async function coinMetricsRows() {
   const rows = [];
   let url =
     "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc" +
-    "&metrics=CapMrktCurUSD,CapRealUSD&frequency=1d&start_time=2011-01-01&page_size=10000";
+    "&metrics=CapMrktCurUSD,CapRealUSD&frequency=1d&start_time=2010-07-18&page_size=10000";
   for (let i = 0; url && i < 5; i++) {
     const d = await getJson(url, { timeoutMs: 20000 });
     rows.push(...(d.data ?? []).filter((r) => r.CapMrktCurUSD && r.CapRealUSD));
@@ -90,13 +95,14 @@ async function historyFromBitcoinData() {
     .map((r) => [Number(r.unixTs) || toTs(String(r.d)), Number(r.mvrvZscore)])
     .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
     .sort((a, b) => a[0] - b[0]);
-  if (points.length < 100) throw new Error("bitcoin-data 시계열 데이터 부족");
-  return { points, source: "bitcoin-data.com" };
+  // 2014년 초부터 데이터가 없으면 부족한 소스로 보고 CoinMetrics 계산으로 넘어간다
+  if (!points.length || points[0][0] > HISTORY_FROM + 30 * 86400) throw new Error("bitcoin-data 시계열이 2014년 이후부터만 존재");
+  return { points: fromHistoryStart(points), source: "bitcoin-data.com" };
 }
 
 async function historyFromCoinMetrics() {
   const series = computeZSeries(await coinMetricsRows());
-  return { points: series.map((r) => [toTs(r.date), r.value]), source: "CoinMetrics (직접 계산)" };
+  return { points: fromHistoryStart(series.map((r) => [toTs(r.date), r.value])), source: "CoinMetrics (직접 계산)" };
 }
 
 // 그래프에 색을 씌울 구간 (카드의 구간 정의와 같은 기준: 0 이하 저평가, 7 이상 극단적 과열)
