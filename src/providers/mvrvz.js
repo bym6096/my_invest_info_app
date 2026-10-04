@@ -88,21 +88,45 @@ export async function mvrvz() {
   };
 }
 
-// 시계열: bitcoin-data.com 전체 이력 → 실패 시 CoinMetrics로 계산. points = [[unixSec, value], ...]
+// 시계열: bitcoin-data.com 전체 이력 → 2014년부터 없거나 실패하면 CoinMetrics 로 계산.
+// points = [[unixSec, value], ...]
 async function historyFromBitcoinData() {
   const rows = await getJson("https://bitcoin-data.com/v1/mvrv-zscore", { timeoutMs: 20000 });
   const points = (Array.isArray(rows) ? rows : [])
     .map((r) => [Number(r.unixTs) || toTs(String(r.d)), Number(r.mvrvZscore)])
     .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v))
     .sort((a, b) => a[0] - b[0]);
-  // 2014년 초부터 데이터가 없으면 부족한 소스로 보고 CoinMetrics 계산으로 넘어간다
-  if (!points.length || points[0][0] > HISTORY_FROM + 30 * 86400) throw new Error("bitcoin-data 시계열이 2014년 이후부터만 존재");
-  return { points: fromHistoryStart(points), source: "bitcoin-data.com" };
+  if (!points.length) throw new Error("bitcoin-data 시계열 데이터 없음");
+  return {
+    points: fromHistoryStart(points),
+    // 2014년 초 이전 데이터가 없는 소스는 CoinMetrics 가 되면 그쪽을 우선한다
+    startsLate: points[0][0] > HISTORY_FROM + 30 * 86400,
+    source: "bitcoin-data.com",
+  };
 }
 
 async function historyFromCoinMetrics() {
   const series = computeZSeries(await coinMetricsRows());
   return { points: fromHistoryStart(series.map((r) => [toTs(r.date), r.value])), source: "CoinMetrics (직접 계산)" };
+}
+
+const errMsg = (e) => e?.message ?? String(e);
+
+export async function loadMvrvzHistory() {
+  let bd, bdErr;
+  try {
+    bd = await historyFromBitcoinData();
+    if (!bd.startsLate) return bd;
+  } catch (e) {
+    bdErr = e;
+  }
+  try {
+    return await historyFromCoinMetrics();
+  } catch (cmErr) {
+    // CoinMetrics 가 막혀도 bitcoin-data 데이터가 있으면 (짧더라도) 그것을 보여준다
+    if (bd) return { ...bd, source: "bitcoin-data.com (2014년 이전 데이터 없음)" };
+    throw new Error(`bitcoin-data: ${errMsg(bdErr)} / CoinMetrics: ${errMsg(cmErr)}`);
+  }
 }
 
 // 그래프에 색을 씌울 구간 (카드의 구간 정의와 같은 기준: 0 이하 저평가, 7 이상 극단적 과열)
@@ -112,12 +136,6 @@ const BANDS = [
 ];
 
 export async function mvrvzHistory() {
-  const r = await cached("mvrvz-history", 60 * 60_000, async () => {
-    try {
-      return await historyFromBitcoinData();
-    } catch {
-      return await historyFromCoinMetrics();
-    }
-  });
+  const r = await cached("mvrvz-history", 60 * 60_000, loadMvrvzHistory);
   return { id: "mvrvz", decimals: 2, refs: [0, 3, 7], bands: BANDS, points: r.points, source: r.source, stale: r.stale };
 }

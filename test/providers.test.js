@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { calcPremium } from "../src/providers/kimchi.js";
-import { computeZ, computeZSeries, fromHistoryStart } from "../src/providers/mvrvz.js";
+import { computeZ, computeZSeries, fromHistoryStart, loadMvrvzHistory } from "../src/providers/mvrvz.js";
 import { getHistory, getIndicator, listIndicators } from "../src/api.js";
 
 test("김치프리미엄 계산", () => {
@@ -90,4 +90,28 @@ test("MVRV-Z 시계열은 2014-01-01부터만 표시", () => {
   const ts = (d) => Date.parse(`${d}T00:00:00Z`) / 1000;
   const pts = [[ts("2013-12-31"), 9], [ts("2014-01-01"), 5], [ts("2020-01-01"), 2]];
   assert.deepEqual(fromHistoryStart(pts).map((p) => p[1]), [5, 2]);
+});
+
+test("MVRV-Z 이력: 두 소스가 모두 실패하면 두 사유를 함께 보고", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => ({ ok: false, status: String(url).includes("coinmetrics") ? 403 : 429 });
+  try {
+    await assert.rejects(loadMvrvzHistory(), /bitcoin-data.*429.*CoinMetrics.*403/s);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test("MVRV-Z 이력: bitcoin-data 가 2014년 이후부터만 있고 CoinMetrics 가 막히면 있는 데이터로 표시", async () => {
+  const orig = globalThis.fetch;
+  const rows = Array.from({ length: 200 }, (_, i) => ({ unixTs: String(1500000000 + i * 86400), mvrvZscore: String(i / 100) }));
+  globalThis.fetch = async (url) =>
+    String(url).includes("coinmetrics") ? { ok: false, status: 403 } : { ok: true, json: async () => rows };
+  try {
+    const r = await loadMvrvzHistory();
+    assert.equal(r.points.length, 200);
+    assert.match(r.source, /2014년 이전 데이터 없음/);
+  } finally {
+    globalThis.fetch = orig;
+  }
 });
