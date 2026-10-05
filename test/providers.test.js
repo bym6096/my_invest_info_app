@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcPremium, usdKrw } from "../src/providers/kimchi.js";
+import { calcPremium, describeFxAge, usdKrw } from "../src/providers/kimchi.js";
 import { computeZ, computeZSeries, fromHistoryStart, loadMvrvzHistory } from "../src/providers/mvrvz.js";
 import { realizedCap } from "../public/zscore.js";
 import { getHistory, getIndicator, listIndicators } from "../src/api.js";
@@ -160,4 +160,12 @@ test("환율: 모든 소스 실패 시 사유를 모아서 오류", async () => 
   try {
     await assert.rejects(usdKrw(), /Dunamu.*exchangerate\.fun.*open\.er-api.*frankfurter/s);
   } finally { restore(); }
+});
+
+test("환율 시각: KST 변환과 경과 시간, 6시간 초과 시 휴장/지연 표시", () => {
+  const asOf = "2026-10-02T06:30:00.000Z"; // KST 10/02 15:30
+  assert.equal(describeFxAge(asOf, Date.parse("2026-10-02T06:40:00Z")), "10/02 15:30 KST (방금 전)");
+  assert.equal(describeFxAge(asOf, Date.parse("2026-10-02T09:40:00Z")), "10/02 15:30 KST (3시간 전)");
+  assert.equal(describeFxAge(asOf, Date.parse("2026-10-04T06:30:00Z")), "10/02 15:30 KST (2일 전) · 휴장/지연");
+  assert.equal(describeFxAge(null), "");
 });
