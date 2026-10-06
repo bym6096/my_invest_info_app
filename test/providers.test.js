@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcPremium, describeFxAge, usdKrw } from "../src/providers/kimchi.js";
+import { calcPremium, describeFxAge, shortAge, usdKrw } from "../src/providers/kimchi.js";
 import { computeZ, computeZSeries, fromHistoryStart, loadMvrvzHistory } from "../src/providers/mvrvz.js";
 import { realizedCap } from "../public/zscore.js";
 import { getHistory, getIndicator, listIndicators } from "../src/api.js";
@@ -168,4 +168,35 @@ test("환율 시각: KST 변환과 경과 시간, 6시간 초과 시 휴장/지�
   assert.equal(describeFxAge(asOf, Date.parse("2026-10-02T09:40:00Z")), "10/02 15:30 KST (3시간 전)");
   assert.equal(describeFxAge(asOf, Date.parse("2026-10-04T06:30:00Z")), "10/02 15:30 KST (2일 전) · 휴장/지연");
   assert.equal(describeFxAge(null), "");
+});
+
+test("환율: 모든 소스를 조회해 가장 최근 시각의 값을 선택 (두나무가 묵었으면 Yahoo)", async () => {
+  const now = Date.now();
+  const restore = mockFetch({
+    "dunamu.com": [{ basePrice: 1340, timestamp: now - 10 * 3600_000 }],
+    "finance.yahoo.com": { chart: { result: [{ meta: { regularMarketPrice: 1352.2, regularMarketTime: Math.floor(now / 1000) - 30 } }] } },
+    "exchangerate.fun": { timestamp: Math.floor(now / 1000) - 3 * 3600, rates: { KRW: 1345 } },
+  });
+  try {
+    const r = await usdKrw();
+    assert.equal(r.rate, 1352.2);
+    assert.equal(r.source, "Yahoo Finance");
+    assert.equal(r.candidates.length, 5);
+    assert.deepEqual(r.candidates.map((c) => c.ok), [true, true, true, false, false]);
+  } finally { restore(); }
+});
+
+test("환율: 시각이 없는 소스보다 시각이 있는 소스를 우선", async () => {
+  const restore = mockFetch({ "dunamu.com": [{ basePrice: 1340 }], "exchangerate.fun": { timestamp: 1759500000, rates: { KRW: 1349 } } });
+  try {
+    assert.equal((await usdKrw()).source, "exchangerate.fun");
+  } finally { restore(); }
+});
+
+test("소스 비교용 짧은 경과 시간", () => {
+  const now = Date.parse("2026-10-06T10:00:00Z");
+  assert.equal(shortAge("2026-10-06T09:59:30Z", now), "방금");
+  assert.equal(shortAge("2026-10-06T00:00:00Z", now), "10시간");
+  assert.equal(shortAge("2026-10-02T00:00:00Z", now), "4일");
+  assert.equal(shortAge(null, now), "?");
 });
