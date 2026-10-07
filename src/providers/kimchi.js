@@ -10,7 +10,7 @@ async function upbitUsdt() {
 // USD/KRW 환율 소스 (모두 무료·키 불필요). 전부 동시에 조회해서 "가장 최근 시각"의 값을 고른다.
 // 시각이 같거나 알 수 없으면 아래 순서가 우선한다.
 // 1) 두나무(업비트 운영사) 외환 시세 — 업비트 앱이 보여주는 환율과 같은 값, 비공식 엔드포인트
-// 2) Yahoo Finance(KRW=X) — 분 단위 갱신, 비공식 엔드포인트
+// 2) Yahoo Finance(KRW=X) — 분 단위 갱신, 비공식 엔드포인트 (query1 + query2 예비)
 // 3) exchangerate.fun — 1시간마다 갱신
 // 4) open.er-api.com — 하루 1회 갱신 (한국 시간 오전 9시경)
 // 5) frankfurter.app — ECB 일별 기준환율
@@ -31,6 +31,17 @@ const FX_SOURCES = [
     name: "Yahoo Finance",
     short: "Yahoo",
     url: "https://query1.finance.yahoo.com/v8/finance/chart/KRW=X?interval=1m&range=1d",
+    headers: { "user-agent": BROWSER_UA },
+    parse: (d) => {
+      const m = d?.chart?.result?.[0]?.meta;
+      return { rate: Number(m?.regularMarketPrice), asOf: m?.regularMarketTime ? new Date(m.regularMarketTime * 1000).toISOString() : null };
+    },
+  },
+  {
+    // 같은 Yahoo 의 다른 서버: 한쪽이 일시적으로 막혀도 다른 쪽이 받도록 하는 예비
+    name: "Yahoo Finance (예비)",
+    short: "Yahoo2",
+    url: "https://query2.finance.yahoo.com/v8/finance/chart/KRW=X?interval=1m&range=1d",
     headers: { "user-agent": BROWSER_UA },
     parse: (d) => {
       const m = d?.chart?.result?.[0]?.meta;

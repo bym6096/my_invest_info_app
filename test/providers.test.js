@@ -181,8 +181,8 @@ test("환율: 모든 소스를 조회해 가장 최근 시각의 값을 선택 (
     const r = await usdKrw();
     assert.equal(r.rate, 1352.2);
     assert.equal(r.source, "Yahoo Finance");
-    assert.equal(r.candidates.length, 5);
-    assert.deepEqual(r.candidates.map((c) => c.ok), [true, true, true, false, false]);
+    assert.equal(r.candidates.length, 6);
+    assert.deepEqual(r.candidates.map((c) => c.ok), [true, true, true, true, false, false]);
   } finally { restore(); }
 });
 
