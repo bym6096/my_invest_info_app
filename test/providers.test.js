@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcPremium, describeFxAge, shortAge, usdKrw } from "../src/providers/kimchi.js";
+import { calcPremium, describeFxAge, shortAge, shortError, usdKrw } from "../src/providers/kimchi.js";
 import { computeZ, computeZSeries, fromHistoryStart, loadMvrvzHistory } from "../src/providers/mvrvz.js";
 import { realizedCap } from "../public/zscore.js";
 import { getHistory, getIndicator, listIndicators } from "../src/api.js";
@@ -199,4 +199,11 @@ test("소스 비교용 짧은 경과 시간", () => {
   assert.equal(shortAge("2026-10-06T00:00:00Z", now), "10시간");
   assert.equal(shortAge("2026-10-02T00:00:00Z", now), "4일");
   assert.equal(shortAge(null, now), "?");
+});
+
+test("실패 사유 축약", () => {
+  assert.equal(shortError("quotation-api-cdn.dunamu.com 응답 오류 (HTTP 403)"), "HTTP 403");
+  assert.equal(shortError("The operation was aborted due to timeout"), "시간초과");
+  assert.equal(shortError("fetch failed"), "연결실패");
+  assert.equal(shortError(""), "오류");
 });

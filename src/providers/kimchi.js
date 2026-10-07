@@ -85,6 +85,15 @@ export async function usdKrw(sources = FX_SOURCES) {
   return { rate: best.rate, source: best.name, asOf: best.asOf, candidates };
 }
 
+// 실패 사유를 카드에 넣을 수 있게 짧게 줄인다 (예: "HTTP 403", "시간초과")
+export function shortError(msg = "") {
+  const http = /HTTP (\d+)/.exec(msg);
+  if (http) return `HTTP ${http[1]}`;
+  if (/abort|timeout|timed out/i.test(msg)) return "시간초과";
+  if (/fetch failed|ENOTFOUND|ECONN|network/i.test(msg)) return "연결실패";
+  return msg.slice(0, 18) || "오류";
+}
+
 // 소스 비교용 짧은 경과 시간 (예: "방금", "3시간", "2일", 시각 불명은 "?")
 export function shortAge(asOf, now = Date.now()) {
   const t = asOf ? Date.parse(asOf) : NaN;
@@ -126,7 +135,7 @@ export async function kimchi() {
       { label: "USD/KRW 환율", value: `${fxRate.toLocaleString("ko-KR", { maximumFractionDigits: 2 })} 원` },
       { label: "환율 출처", value: fx.source },
       ...(fx.asOf ? [{ label: "환율 시각", value: describeFxAge(fx.asOf) }] : []),
-      { label: "소스별 시각", value: fx.candidates.map((c) => `${c.short} ${c.ok ? shortAge(c.asOf) : "실패"}`).join(" · ") },
+      { label: "소스별 시각", value: fx.candidates.map((c) => `${c.short} ${c.ok ? shortAge(c.asOf) : `실패(${shortError(c.error)})`}`).join(" · ") },
     ],
     // 구간: 음수=역프리미엄, 0~1 정상, 1~3 약간 높음, 3 이상 과열
     zones: [
