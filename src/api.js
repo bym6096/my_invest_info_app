@@ -1,5 +1,4 @@
 import { providers } from "./providers/index.js";
-import { getPrices } from "./providers/prices.js";
 
 // 로컬 서버와 Vercel 함수가 함께 쓰는 API 로직. { status, headers, body } 반환.
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
@@ -42,15 +41,5 @@ export async function getHistory(id) {
       headers: { ...JSON_HEADERS, "cache-control": "no-store" },
       body: { id, error: err?.message ?? String(err) },
     };
-  }
-}
-
-// 보유 코인 현재가 (업비트 KRW). symbols = "BTC,ETH"
-export async function getPricesApi(symbolsParam) {
-  try {
-    const body = await getPrices(String(symbolsParam ?? "").split(","));
-    return { status: 200, headers: { ...JSON_HEADERS, "cache-control": "public, max-age=0, s-maxage=5, stale-while-revalidate=30" }, body };
-  } catch (err) {
-    return { status: 502, headers: { ...JSON_HEADERS, "cache-control": "no-store" }, body: { error: err?.message ?? String(err) } };
   }
 }

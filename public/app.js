@@ -1,5 +1,4 @@
 import { createChart } from "/chart.js";
-import { hidePortfolio, showPortfolio } from "/portfolio.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -89,15 +88,3 @@ setInterval(load, 60_000);
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
-
-// 탭 전환 (지표 / 포트폴리오). 주소의 #portfolio 로 직접 열 수도 있다.
-function switchTab(name) {
-  const isPortfolio = name === "portfolio";
-  $("cards").hidden = isPortfolio;
-  $("portfolio").hidden = !isPortfolio;
-  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === name)));
-  history.replaceState(null, "", isPortfolio ? "#portfolio" : location.pathname);
-  if (isPortfolio) showPortfolio(); else hidePortfolio();
-}
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
-if (location.hash === "#portfolio") switchTab("portfolio");
