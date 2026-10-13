@@ -3,14 +3,6 @@ import { COINMETRICS_URL, HISTORY_FROM, MVRVZ_META, computeZ, computeZSeries, fr
 
 export { computeZ, computeZSeries, fromHistoryStart };
 
-// 1차: bitcoin-data.com (MVRV-Z 직접 제공, 무료 호출 제한 있음)
-async function fromBitcoinData() {
-  const d = await getJson("https://bitcoin-data.com/v1/mvrv-zscore/last");
-  const value = Number(d?.mvrvZscore);
-  if (!Number.isFinite(value)) throw new Error("bitcoin-data 응답 형식 오류");
-  return { value, date: d.d, source: "bitcoin-data.com" };
-}
-
 // 클라우드 IP/비브라우저 UA 를 막는 경우가 있어 일반 브라우저 UA 로 요청한다
 const CM_HEADERS = { "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" };
 
@@ -25,27 +17,19 @@ async function coinMetricsRows() {
   return rows;
 }
 
-// 2차: CoinMetrics 커뮤니티 API 원데이터로 직접 계산
-async function fromCoinMetrics() {
-  const z = computeZ(await coinMetricsRows());
-  return { ...z, source: "CoinMetrics (직접 계산)" };
-}
+const fmtDate = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
 
+// 카드의 현재 값은 그래프와 같은 시계열의 마지막 점이다 (두 숫자가 항상 일치).
 export async function mvrvz() {
-  const r = await cached("mvrvz", 60 * 60_000, async () => {
-    try {
-      return await fromBitcoinData();
-    } catch {
-      return await fromCoinMetrics();
-    }
-  });
+  const r = await cached("mvrvz-history", 60 * 60_000, loadMvrvzHistory);
+  const [ts, value] = r.points[r.points.length - 1];
   return {
     id: "mvrvz",
     title: "BTC MVRV Z-Score",
-    value: r.value,
+    value,
     unit: "",
     decimals: 2,
-    details: [{ label: "기준일", value: r.date ?? "-" }],
+    details: [{ label: "기준일", value: fmtDate(ts) }],
     // 통상 해석: 7 이상 고점권, 0 이하 저점권
     zones: [
       { max: 0, label: "저평가 (바닥권)", tone: "blue" },
@@ -55,12 +39,12 @@ export async function mvrvz() {
     ],
     range: [-1, 10],
     source: r.source,
-    updatedAt: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
+    updatedAt: new Date(ts * 1000).toISOString(),
     stale: r.stale,
   };
 }
 
-// 시계열: bitcoin-data.com 전체 이력 → 2014년부터 없거나 실패하면 CoinMetrics 로 계산.
+// 시계열: CoinMetrics 원데이터로 계산(2014~, bitcoin-data.com 과 평균 오차 0.01 미만) → 실패하면 bitcoin-data.com 이력.
 // points = [[unixSec, value], ...]
 async function historyFromBitcoinData() {
   const rows = await getJson("https://bitcoin-data.com/v1/mvrv-zscore", { timeoutMs: 20000 });
@@ -85,19 +69,18 @@ async function historyFromCoinMetrics() {
 const errMsg = (e) => e?.message ?? String(e);
 
 export async function loadMvrvzHistory() {
-  let bd, bdErr;
-  try {
-    bd = await historyFromBitcoinData();
-    if (!bd.startsLate) return bd;
-  } catch (e) {
-    bdErr = e;
-  }
+  let cmErr;
   try {
     return await historyFromCoinMetrics();
-  } catch (cmErr) {
-    // CoinMetrics 가 막혀도 bitcoin-data 데이터가 있으면 (짧더라도) 그것을 보여준다
-    if (bd) return { ...bd, partial: true, source: "bitcoin-data.com (2014년 이전 데이터 없음)" };
-    throw new Error(`bitcoin-data: ${errMsg(bdErr)} / CoinMetrics: ${errMsg(cmErr)}`);
+  } catch (e) {
+    cmErr = e;
+  }
+  try {
+    const bd = await historyFromBitcoinData();
+    // bitcoin-data 무료 이력은 최근 4년뿐이라 2014년부터가 아니면 부분 데이터로 표시한다
+    return bd.startsLate ? { ...bd, partial: true, source: "bitcoin-data.com (2014년 이전 데이터 없음)" } : bd;
+  } catch (bdErr) {
+    throw new Error(`CoinMetrics: ${errMsg(cmErr)} / bitcoin-data: ${errMsg(bdErr)}`);
   }
 }
 

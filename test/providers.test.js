@@ -93,11 +93,11 @@ test("MVRV-Z 시계열은 2014-01-01부터만 표시", () => {
   assert.deepEqual(fromHistoryStart(pts).map((p) => p[1]), [5, 2]);
 });
 
-test("MVRV-Z 이력: 두 소스가 모두 실패하면 두 사유를 함께 보고", async () => {
+test("MVRV-Z 이력: 두 소스가 모두 실패하면 두 사유를 함께 보고(CoinMetrics 먼저)", async () => {
   const orig = globalThis.fetch;
   globalThis.fetch = async (url) => ({ ok: false, status: String(url).includes("coinmetrics") ? 403 : 429 });
   try {
-    await assert.rejects(loadMvrvzHistory(), /bitcoin-data.*429.*CoinMetrics.*403/s);
+    await assert.rejects(loadMvrvzHistory(), /CoinMetrics.*403.*bitcoin-data.*429/s);
   } finally {
     globalThis.fetch = orig;
   }
@@ -206,4 +206,27 @@ test("실패 사유 축약", () => {
   assert.equal(shortError("The operation was aborted due to timeout"), "시간초과");
   assert.equal(shortError("fetch failed"), "연결실패");
   assert.equal(shortError(""), "오류");
+});
+
+test("MVRV-Z 카드는 그래프와 같은 시계열의 마지막 점을 쓴다", async () => {
+  const { clearCache } = await import("../src/http.js");
+  const { mvrvz, mvrvzHistory } = await import("../src/providers/mvrvz.js");
+  clearCache();
+  const rows = Array.from({ length: 400 }, (_, i) => ({
+    time: new Date(Date.UTC(2020, 0, 1) + i * 86400000).toISOString().replace("Z", "000000Z"),
+    CapMrktCurUSD: String(1e11 * (1 + i / 100) * (1 + 0.2 * Math.sin(i / 7))),
+    CapMVRVCur: String(1.5 + 0.3 * Math.sin(i / 11)),
+  }));
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ data: rows }) });
+  try {
+    const card = await mvrvz();
+    const hist = await mvrvzHistory();
+    assert.equal(card.value, hist.points.at(-1)[1]);
+    assert.equal(card.details[0].value, new Date(hist.points.at(-1)[0] * 1000).toISOString().slice(0, 10));
+    assert.match(card.source, /CoinMetrics/);
+  } finally {
+    globalThis.fetch = orig;
+    clearCache();
+  }
 });
