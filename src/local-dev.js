@@ -2,14 +2,19 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getHistory, getIndicator, listIndicators } from "./api.js";
+import { getHistory, getIndicator, getPricesApi, listIndicators } from "./api.js";
 
 const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
 const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".mjs": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json" };
 
 export function createApp() {
   return createServer(async (req, res) => {
-    const { pathname } = new URL(req.url, "http://x");
+    const { pathname, searchParams } = new URL(req.url, "http://x");
+    if (pathname === "/api/prices") {
+      const { status, headers, body } = await getPricesApi(searchParams.get("symbols"));
+      res.writeHead(status, headers);
+      return res.end(JSON.stringify(body));
+    }
     if (pathname.startsWith("/api/history/")) {
       const { status, headers, body } = await getHistory(pathname.split("/")[3]);
       res.writeHead(status, headers);

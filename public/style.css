@@ -59,3 +59,39 @@ dt{color:var(--muted)}dd{margin:0}
 .chart .band.t-lime{fill:var(--lime)}.chart .band.t-blue{fill:var(--blue)}
 .chart .band-label{fill:var(--muted);font-size:10px}
 .chart .band.t-sky{fill:var(--sky)}
+
+/* 탭 */
+.tabs{display:flex;gap:8px;padding:0 16px 12px;max-width:1200px;margin:0 auto}
+.tabs button{padding:6px 16px;border-radius:999px;color:var(--muted)}
+.tabs button[aria-pressed="true"]{color:var(--text);border-color:var(--text);font-weight:600}
+main[hidden]{display:none}
+
+/* 포트폴리오 */
+#portfolio .value{font-size:1.8rem}
+.hint{color:var(--muted);font-size:.85rem;margin:6px 0}
+.err{color:var(--red);font-size:.85rem;margin-top:8px}
+.card button.primary,.modal button.primary{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:600}
+.card button:disabled{opacity:.4;cursor:default}
+.card button.danger{color:var(--red)}
+.field{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:.85rem;color:var(--muted)}
+input,select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:inherit;width:100%}
+.form{display:flex;flex-direction:column}
+.form>button{margin-top:8px}
+details.coin{border-top:1px solid var(--border);padding:8px 0}
+details.coin>summary{display:grid;grid-template-columns:70px 1fr auto;gap:8px;cursor:pointer;list-style:none}
+details.coin>summary::-webkit-details-marker{display:none}
+details.coin .w{color:var(--muted)}
+details.coin h4{margin:12px 0 4px;font-size:.8rem;color:var(--muted)}
+.hist{display:flex;justify-content:space-between;gap:8px;font-size:.85rem;padding:3px 0}
+.pos{color:var(--text)}.neg{color:var(--red)}
+.row-actions{display:flex;gap:8px;margin-top:8px}
+dialog.modal{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:16px;width:min(92vw,420px)}
+dialog.modal::backdrop{background:rgba(0,0,0,.5)}
+dialog.modal h3{margin:0 0 8px;font-size:1rem}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;flex-wrap:wrap}
+table.alloc{width:100%;border-collapse:collapse;font-size:.85rem;margin:8px 0}
+table.alloc th,table.alloc td{text-align:right;padding:4px 6px;border-bottom:1px solid var(--border)}
+table.alloc th:first-child,table.alloc td:first-child{text-align:left}
+label.radio{display:flex;gap:8px;align-items:center;margin:6px 0;font-size:.9rem}
+label.radio input{width:auto}
+@media (min-width:720px){#portfolio{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}}

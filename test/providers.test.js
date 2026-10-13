@@ -207,3 +207,21 @@ test("실패 사유 축약", () => {
   assert.equal(shortError("fetch failed"), "연결실패");
   assert.equal(shortError(""), "오류");
 });
+
+test("현재가 API: 업비트 원화마켓에 없는 심볼은 unknown 으로 분리, 잘못된 심볼은 거부", async () => {
+  const { getPricesApi } = await import("../src/api.js");
+  const restore = mockFetch({
+    "market/all": [{ market: "KRW-BTC" }, { market: "KRW-ETH" }, { market: "BTC-ETH" }],
+    "v1/ticker": [{ market: "KRW-BTC", trade_price: 100000000 }],
+  });
+  try {
+    const ok = await getPricesApi("btc,FOO");
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body.prices, { BTC: 100000000 });
+    assert.deepEqual(ok.body.unknown, ["FOO"]);
+    assert.match(ok.headers["cache-control"], /s-maxage=5/);
+    const bad = await getPricesApi("BTC,../x");
+    assert.equal(bad.status, 502);
+    assert.equal(bad.headers["cache-control"], "no-store");
+  } finally { restore(); }
+});

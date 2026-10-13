@@ -1,6 +1,6 @@
 // 온라인이면 항상 최신(네트워크 우선), 오프라인이면 마지막으로 캐시된 화면/값을 사용.
 const CACHE = "invest-v2";
-const SHELL = ["/", "/style.css", "/app.js", "/chart.js", "/manifest.webmanifest", "/icons/icon-192.png"];
+const SHELL = ["/", "/style.css", "/app.js", "/chart.js", "/portfolio.js", "/portfolio-core.js", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
