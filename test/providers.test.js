@@ -20,7 +20,7 @@ test("MVRV-Z 계산: (최종 시총 - 실현시총) / 시총 표준편차", () =
 });
 
 test("지표 목록과 알 수 없는 id 처리", async () => {
-  assert.deepEqual(listIndicators().body.map((x) => x.id), ["kimchi", "mvrvz", "fng"]);
+  assert.deepEqual(listIndicators().body.map((x) => x.id), ["kimchi", "mvrvz", "fng", "powerlaw"]);
   const r = await getIndicator("nope");
   assert.equal(r.status, 404);
 });
@@ -84,7 +84,7 @@ test("공포탐욕 시계열: 오름차순 정렬, kimchi 는 시계열 없음",
 
 test("목록에 history 플래그 포함", () => {
   const m = Object.fromEntries(listIndicators().body.map((x) => [x.id, x.history]));
-  assert.deepEqual(m, { kimchi: false, mvrvz: true, fng: true });
+  assert.deepEqual(m, { kimchi: false, mvrvz: true, fng: true, powerlaw: false });
 });
 
 test("MVRV-Z 시계열은 2014-01-01부터만 표시", () => {
@@ -229,4 +229,59 @@ test("MVRV-Z 카드는 그래프와 같은 시계열의 마지막 점을 쓴다"
     globalThis.fetch = orig;
     clearCache();
   }
+});
+
+// ---- 멱법칙 바닥선 ----
+import { computePowerLaw, olsFit, quantileFit, toLogPoints } from "../src/providers/powerlaw.js";
+
+function synthPoints(n = 3000, k = 5.8, c = -17) {
+  // 결정적 의사난수(LCG)로 잔차를 만든다: 균등분포 [-0.5, 0.5)
+  let s = 42;
+  const rnd = () => ((s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31) - 0.5;
+  return Array.from({ length: n }, (_, i) => {
+    const x = Math.log10(800 + i);
+    return { date: `d${i}`, x, y: c + k * x + rnd() };
+  });
+}
+
+test("멱법칙: OLS 는 기울기를 복원하고, 1%/5% 분위선 아래 비율이 각각 약 1%/5%", () => {
+  const pts = synthPoints();
+  assert.ok(Math.abs(olsFit(pts).k - 5.8) < 0.1);
+  for (const q of [0.01, 0.05]) {
+    const f = quantileFit(pts, q);
+    const below = pts.filter((p) => p.y < f.c + f.k * p.x).length / pts.length;
+    assert.ok(Math.abs(below - q) < 0.005, `q=${q} below=${below}`);
+    assert.ok(Math.abs(f.k - 5.8) < 0.2, `q=${q} k=${f.k}`);
+  }
+});
+
+test("멱법칙: 선 순서는 바닥 < 지지 < 적정 < 상단, 2011년 이전·0원 데이터는 제외", () => {
+  const r = computePowerLaw(synthPoints());
+  assert.ok(r.floor < r.support && r.support < r.fair && r.fair < r.top);
+  const pts = toLogPoints([
+    { time: "2010-12-31T00:00:00Z", PriceUSD: "0.3" },
+    { time: "2011-01-01T00:00:00Z", PriceUSD: "0.3" },
+    { time: "2011-01-02T00:00:00Z", PriceUSD: "0" },
+  ]);
+  assert.deepEqual(pts.map((p) => p.date), ["2011-01-01"]);
+});
+
+test("멱법칙 카드: CoinMetrics 가격으로 바닥선 대비 % 와 구간을 만든다 (mock)", async () => {
+  const day = (i) => new Date(Date.UTC(2011, 0, 1) + i * 86400_000).toISOString();
+  const G = Date.UTC(2009, 0, 3);
+  const data = Array.from({ length: 2000 }, (_, i) => {
+    const days = (Date.UTC(2011, 0, 1) + i * 86400_000 - G) / 86400_000;
+    const wobble = 10 ** (0.4 * Math.sin(i / 50));
+    return { time: day(i), PriceUSD: String(1e-17 * days ** 5.8 * wobble) };
+  });
+  const restore = mockFetch({ coinmetrics: { data } });
+  try {
+    const r = await getIndicator("powerlaw");
+    assert.equal(r.status, 200);
+    assert.equal(r.body.unit, "%");
+    assert.ok(Number.isFinite(r.body.value));
+    assert.equal(r.body.zones[0].max, 0);
+    assert.ok(r.body.zones.slice(1, -1).every((z, i, a) => i === 0 || z.max > a[i - 1].max));
+    assert.match(r.headers["cache-control"], /s-maxage=3600/);
+  } finally { restore(); }
 });
