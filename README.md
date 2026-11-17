@@ -7,7 +7,7 @@
 | 김치프리미엄 | `(업비트 KRW-USDT / USD·KRW 환율 − 1) × 100` — Upbit, open.er-api.com(대체: frankfurter) |
 | MVRV Z-Score | bitcoin-data.com (실패 시 CoinMetrics 원데이터로 직접 계산) |
 | Fear & Greed | alternative.me |
-| BTC 멱법칙 바닥선 대비 | CoinMetrics 일별 가격(2011~)으로 `log10(가격) ~ log10(제네시스 이후 일수)` 분위 회귀를 매일 다시 계산. 바닥선=1% 분위, 지지선=5% 분위(산토스타시 방식), 적정가=OLS |
+| BTC 멱법칙 바닥선 대비 | CoinMetrics 일별 가격(2011~)으로 `log10(가격) ~ log10(제네시스 이후 일수)` 분위 회귀를 매일 다시 계산. 바닥선=1% 분위, 지지선=5% 분위(산토스타시 방식), 적정가=OLS. 현재가는 실시간(Coinbase → Bitstamp → Kraken, 1분 캐시) |
 
 ```
 npm start      # http://localhost:3000

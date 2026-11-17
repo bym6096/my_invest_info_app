@@ -232,7 +232,7 @@ test("MVRV-Z 카드는 그래프와 같은 시계열의 마지막 점을 쓴다"
 });
 
 // ---- 멱법칙 바닥선 ----
-import { computePowerLaw, olsFit, quantileFit, toLogPoints } from "../src/providers/powerlaw.js";
+import { computePowerLaw, livePrice, olsFit, positionAt, quantileFit, toLogPoints } from "../src/providers/powerlaw.js";
 
 function synthPoints(n = 3000, k = 5.8, c = -17) {
   // 결정적 의사난수(LCG)로 잔차를 만든다: 균등분포 [-0.5, 0.5)
@@ -256,8 +256,14 @@ test("멱법칙: OLS 는 기울기를 복원하고, 1%/5% 분위선 아래 비�
 });
 
 test("멱법칙: 선 순서는 바닥 < 지지 < 적정 < 상단, 2011년 이전·0원 데이터는 제외", () => {
-  const r = computePowerLaw(synthPoints());
+  const synth = synthPoints();
+  const m = computePowerLaw(synth);
+  const last = synth.at(-1);
+  const r = positionAt(m, 10 ** last.y, last.x);
   assert.ok(r.floor < r.support && r.support < r.fair && r.fair < r.top);
+  // 바닥선보다 한참 아래면 "이보다 낮았던 날" 0, 한참 위면 1
+  assert.equal(positionAt(m, r.floor / 10, last.x).lowerShare, 0);
+  assert.equal(positionAt(m, r.floor * 100, last.x).lowerShare, 1);
   const pts = toLogPoints([
     { time: "2010-12-31T00:00:00Z", PriceUSD: "0.3" },
     { time: "2011-01-01T00:00:00Z", PriceUSD: "0.3" },
@@ -274,14 +280,28 @@ test("멱법칙 카드: CoinMetrics 가격으로 바닥선 대비 % 와 구간�
     const wobble = 10 ** (0.4 * Math.sin(i / 50));
     return { time: day(i), PriceUSD: String(1e-17 * days ** 5.8 * wobble) };
   });
-  const restore = mockFetch({ coinmetrics: { data } });
+  const restore = mockFetch({ coinmetrics: { data }, "coinbase.com": { data: { amount: "50000" } } });
   try {
     const r = await getIndicator("powerlaw");
     assert.equal(r.status, 200);
+    assert.match(r.body.details[0].value, /^\$50,000 \(Coinbase, /);
     assert.equal(r.body.unit, "%");
     assert.ok(Number.isFinite(r.body.value));
     assert.equal(r.body.zones[0].max, 0);
     assert.ok(r.body.zones.slice(1, -1).every((z, i, a) => i === 0 || z.max > a[i - 1].max));
-    assert.match(r.headers["cache-control"], /s-maxage=3600/);
+    assert.match(r.headers["cache-control"], /s-maxage=60,/);
+  } finally { restore(); }
+});
+
+test("멱법칙 실시간 가격: Coinbase 실패 시 Bitstamp, 모두 실패하면 null", async () => {
+  let restore = mockFetch({ "bitstamp.net": { last: "61000.5" } });
+  try {
+    const r = await livePrice();
+    assert.equal(r.price, 61000.5);
+    assert.equal(r.source, "Bitstamp");
+  } finally { restore(); }
+  restore = mockFetch({});
+  try {
+    assert.equal(await livePrice(), null);
   } finally { restore(); }
 });

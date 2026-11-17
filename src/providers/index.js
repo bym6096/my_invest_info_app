@@ -9,5 +9,5 @@ export const providers = [
   { id: "kimchi", title: "김치프리미엄 (USDT)", ttl: 10, load: kimchi },
   { id: "mvrvz", title: "BTC MVRV Z-Score", ttl: 3600, load: mvrvz, history: mvrvzHistory, historyTtl: 1800 },
   { id: "fng", title: "Crypto Fear & Greed Index", ttl: 300, load: fng, history: fngHistory, historyTtl: 900 },
-  { id: "powerlaw", title: "BTC 멱법칙 바닥선 대비", ttl: 3600, load: powerlaw },
+  { id: "powerlaw", title: "BTC 멱법칙 바닥선 대비", ttl: 60, load: powerlaw },
 ];

@@ -4,7 +4,7 @@ import { getJson, cached } from "../http.js";
 // - 바닥선(1% 분위): 2011년 이후 날의 1%만 이 선 아래에 있었다
 // - 지지선(5% 분위): 산토스타시가 밝힌 지지선 정의(5% 분위 회귀)
 // - 적정가: 최소제곱(OLS) 추세선
-// 계수는 고정하지 않고 받은 데이터 전체로 매번 다시 맞춘다.
+// 회귀선은 CoinMetrics 일봉(확정 종가)으로 매번 다시 맞추고, 현재 위치는 실시간 가격으로 평가한다.
 
 const GENESIS = Date.UTC(2009, 0, 3) / 1000;
 const FIT_FROM = "2011-01-01"; // 2010년은 거래가 얇아 회귀에서 뺀다
@@ -13,14 +13,13 @@ const CM_URL =
   `&metrics=PriceUSD&frequency=1d&start_time=${FIT_FROM}&page_size=10000`;
 const CM_HEADERS = { "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" };
 
+export const xAt = (tsSec) => Math.log10((tsSec - GENESIS) / 86400);
+
 // rows: [{time, PriceUSD}] → [{date, x, y}] (x = log10 일수, y = log10 가격)
 export function toLogPoints(rows) {
   return rows
     .filter((r) => Number(r.PriceUSD) > 0)
-    .map((r) => {
-      const days = (Date.parse(r.time) / 1000 - GENESIS) / 86400;
-      return { date: r.time.slice(0, 10), x: Math.log10(days), y: Math.log10(Number(r.PriceUSD)) };
-    })
+    .map((r) => ({ date: r.time.slice(0, 10), x: xAt(Date.parse(r.time) / 1000), y: Math.log10(Number(r.PriceUSD)) }))
     .filter((p) => Number.isFinite(p.x) && p.date >= FIT_FROM);
 }
 
@@ -58,26 +57,32 @@ export function quantileFit(pts, q) {
 
 const lineAt = ({ c, k }, x) => 10 ** (c + k * x);
 
+// 일봉으로 회귀선을 맞춘 모델. 현재 위치는 positionAt 으로 아무 시점·가격에서나 평가한다.
 export function computePowerLaw(pts) {
   if (pts.length < 365) throw new Error("멱법칙 계산용 가격 데이터 부족");
-  const fair = olsFit(pts);
   const floor = quantileFit(pts, 0.01);
-  const support = quantileFit(pts, 0.05);
-  const top = quantileFit(pts, 0.95);
+  const fits = { floor, support: quantileFit(pts, 0.05), fair: olsFit(pts), top: quantileFit(pts, 0.95) };
+  // 바닥선 기준 잔차(오름차순): "이보다 낮았던 날" 비율을 이진 탐색으로 구한다
+  const residuals = Float64Array.from(pts, (p) => p.y - (floor.c + floor.k * p.x)).sort();
   const last = pts[pts.length - 1];
-  const res = (p) => p.y - (floor.c + floor.k * p.x);
-  const cur = res(last);
+  return { fits, residuals, from: pts[0].date, date: last.date, closePrice: 10 ** last.y };
+}
+
+export function positionAt(model, price, x) {
+  const { fits, residuals } = model;
+  const cur = Math.log10(price) - (fits.floor.c + fits.floor.k * x);
+  let lo = 0, hi = residuals.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (residuals[mid] < cur) lo = mid + 1; else hi = mid;
+  }
   return {
-    date: last.date,
-    price: 10 ** last.y,
-    floor: lineAt(floor, last.x),
-    support: lineAt(support, last.x),
-    fair: lineAt(fair, last.x),
-    top: lineAt(top, last.x),
-    // 바닥선 기준으로 지금보다 더 낮은 위치였던 날의 비율
-    lowerShare: pts.filter((p) => res(p) < cur).length / pts.length,
-    fits: { floor, support, fair, top },
-    from: pts[0].date,
+    price,
+    floor: lineAt(fits.floor, x),
+    support: lineAt(fits.support, x),
+    fair: lineAt(fits.fair, x),
+    top: lineAt(fits.top, x),
+    lowerShare: lo / residuals.length,
   };
 }
 
@@ -92,29 +97,57 @@ async function loadPrices() {
   return computePowerLaw(toLogPoints(rows));
 }
 
+// 실시간 BTC/USD: Coinbase → Bitstamp → Kraken. 모두 실패하면 null (일봉 종가로 대체).
+const LIVE_SOURCES = [
+  ["Coinbase", "https://api.coinbase.com/v2/prices/BTC-USD/spot", (d) => d.data?.amount],
+  ["Bitstamp", "https://www.bitstamp.net/api/v2/ticker/btcusd/", (d) => d.last],
+  ["Kraken", "https://api.kraken.com/0/public/Ticker?pair=XBTUSD", (d) => Object.values(d.result ?? {})[0]?.c?.[0]],
+];
+
+export async function livePrice() {
+  for (const [source, url, pick] of LIVE_SOURCES) {
+    try {
+      const price = Number(pick(await getJson(url, { timeoutMs: 5000 })));
+      if (price > 0) return { price, source, at: Date.now() };
+    } catch {}
+  }
+  return null;
+}
+
 const usd = (v) => `$${Math.round(v).toLocaleString("en-US")}`;
 const pct = (v) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+const kst = (ms) => {
+  const d = new Date(ms + 9 * 3600_000).toISOString();
+  return `${d.slice(5, 7)}/${d.slice(8, 10)} ${d.slice(11, 16)} KST`;
+};
 
 export async function powerlaw() {
-  const r = await cached("powerlaw", 60 * 60_000, loadPrices);
-  const vsFloor = r.price / r.floor - 1;
+  const [model, live] = await Promise.all([
+    cached("powerlaw", 60 * 60_000, loadPrices),
+    cached("btc-usd-live", 60_000, livePrice),
+  ]);
+  const at = live ? live.at : Date.parse(`${model.date}T00:00:00Z`);
+  const r = positionAt(model, live ? live.price : model.closePrice, xAt(at / 1000));
   const rel = (line) => (line / r.floor - 1) * 100; // 구간 경계를 카드 값(바닥선 대비 %)의 단위로
   return {
     id: "powerlaw",
     title: "BTC 멱법칙 바닥선 대비",
-    value: vsFloor * 100,
+    value: (r.price / r.floor - 1) * 100,
     unit: "%",
     decimals: 1,
     details: [
-      { label: "기준일", value: r.date },
-      { label: "BTC 가격", value: usd(r.price) },
+      {
+        label: "BTC 가격",
+        value: live ? `${usd(r.price)} (${live.source}, ${kst(live.at)})` : `${usd(r.price)} (${model.date} 종가, 실시간 조회 실패)`,
+      },
       { label: "바닥선 (1% 분위)", value: usd(r.floor) },
       { label: "지지선 (5% 분위, 산토스타시)", value: `${usd(r.support)} (${pct(r.price / r.support - 1)})` },
       { label: "추세 적정가", value: `${usd(r.fair)} (${(r.price / r.fair).toFixed(2)}배)` },
       {
-        label: `${r.from.slice(0, 4)}년 이후 이보다 낮았던 날`,
+        label: `${model.from.slice(0, 4)}년 이후 이보다 낮았던 날`,
         value: r.lowerShare > 0 ? `${(r.lowerShare * 100).toFixed(1)}%` : "없음 (역대 최저 위치)",
       },
+      { label: "회귀 데이터 (일봉)", value: `${model.from} ~ ${model.date}` },
     ],
     zones: [
       { max: 0, label: "바닥선 이탈", tone: "blue" },
@@ -123,8 +156,8 @@ export async function powerlaw() {
       { max: rel(r.top), label: "추세 위", tone: "orange" },
       { max: null, label: "과열권 (상위 5%)", tone: "red" },
     ],
-    source: `CoinMetrics 가격, ${r.from.slice(0, 4)}년~ 분위 회귀 직접 계산 (매일 재계산)`,
-    updatedAt: new Date(`${r.date}T00:00:00Z`).toISOString(),
-    stale: r.stale,
+    source: `CoinMetrics 일봉으로 분위 회귀 직접 계산 · 현재가 ${live ? live.source : "일봉 종가"}`,
+    updatedAt: new Date(at).toISOString(),
+    stale: model.stale,
   };
 }
