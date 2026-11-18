@@ -293,6 +293,19 @@ test("멱법칙 카드: CoinMetrics 가격으로 바닥선 대비 % 와 구간�
   } finally { restore(); }
 });
 
+test("멱법칙: 바닥선 아래 연속 일수 (진행 중 구간과 역대 최장)", async () => {
+  const { belowRuns, streakText } = await import("../src/providers/powerlaw.js");
+  const pts = ["01", "02", "03", "04", "05", "06", "07", "08"].map((d) => ({ date: `2015-08-${d}` }));
+  const r = belowRuns(pts, [-1, -1, -1, 1, 1, -1, -1, 1]);
+  assert.deepEqual(r.longest, { days: 3, from: "2015-08-01", to: "2015-08-03" });
+  assert.deepEqual(r.streak, { days: 0 });
+  const now = belowRuns(pts, [-1, -1, -1, 1, 1, 1, -1, -1]);
+  assert.equal(now.streak.days, 2);
+  assert.equal(streakText(now, true), "2일째 (08/07부터) · 역대 최장 3일 (2015-08)");
+  assert.equal(streakText(now, false), "2일째 (08/07부터) · 현재가는 회복 · 역대 최장 3일 (2015-08)");
+  assert.equal(streakText(r, true), "오늘 이탈 (종가 미확정) · 역대 최장 3일 (2015-08)");
+});
+
 test("멱법칙 실시간 가격: Coinbase 실패 시 Bitstamp, 모두 실패하면 null", async () => {
   let restore = mockFetch({ "bitstamp.net": { last: "61000.5" } });
   try {

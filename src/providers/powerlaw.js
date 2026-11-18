@@ -63,9 +63,21 @@ export function computePowerLaw(pts) {
   const floor = quantileFit(pts, 0.01);
   const fits = { floor, support: quantileFit(pts, 0.05), fair: olsFit(pts), top: quantileFit(pts, 0.95) };
   // 바닥선 기준 잔차(오름차순): "이보다 낮았던 날" 비율을 이진 탐색으로 구한다
-  const residuals = Float64Array.from(pts, (p) => p.y - (floor.c + floor.k * p.x)).sort();
+  const raw = Float64Array.from(pts, (p) => p.y - (floor.c + floor.k * p.x));
   const last = pts[pts.length - 1];
-  return { fits, residuals, from: pts[0].date, date: last.date, closePrice: 10 ** last.y };
+  return { fits, residuals: raw.slice().sort(), ...belowRuns(pts, raw), from: pts[0].date, date: last.date, closePrice: 10 ** last.y };
+}
+
+// 일봉 종가가 바닥선 아래에 연속으로 있었던 구간: 지금 진행 중인 구간(streak)과 역대 최장(longest)
+export function belowRuns(pts, residuals) {
+  let longest = { days: 0 }, run = null;
+  for (let i = 0; i < pts.length; i++) {
+    if (residuals[i] < 0) {
+      run = run ? { ...run, days: run.days + 1, to: pts[i].date } : { days: 1, from: pts[i].date, to: pts[i].date };
+      if (run.days > longest.days) longest = run;
+    } else run = null;
+  }
+  return { streak: run ?? { days: 0 }, longest };
 }
 
 export function positionAt(model, price, x) {
@@ -121,6 +133,13 @@ const kst = (ms) => {
   return `${d.slice(5, 7)}/${d.slice(8, 10)} ${d.slice(11, 16)} KST`;
 };
 
+// 일수는 확정 종가 기준, 현재가(실시간)가 선 위/아래인지로 진행 상태를 덧붙인다
+export function streakText({ streak, longest }, liveBelow) {
+  const rec = longest.days ? ` · 역대 최장 ${longest.days}일 (${longest.from.slice(0, 7)})` : "";
+  if (streak.days) return `${streak.days}일째 (${streak.from.slice(5).replace("-", "/")}부터)${liveBelow ? "" : " · 현재가는 회복"}${rec}`;
+  return `${liveBelow ? "오늘 이탈 (종가 미확정)" : "없음"}${rec}`;
+}
+
 export async function powerlaw() {
   const [model, live] = await Promise.all([
     cached("powerlaw", 60 * 60_000, loadPrices),
@@ -145,8 +164,9 @@ export async function powerlaw() {
       { label: "추세 적정가", value: `${usd(r.fair)} (${(r.price / r.fair).toFixed(2)}배)` },
       {
         label: `${model.from.slice(0, 4)}년 이후 이보다 낮았던 날`,
-        value: r.lowerShare > 0 ? `${(r.lowerShare * 100).toFixed(1)}%` : "없음 (역대 최저 위치)",
+        value: r.lowerShare === 0 ? "없음 (역대 최저 위치)" : r.lowerShare < 0.001 ? "0.1% 미만" : `${(r.lowerShare * 100).toFixed(1)}%`,
       },
+      { label: "바닥선 아래 연속 (일봉 종가)", value: streakText(model, r.price < r.floor) },
       { label: "회귀 데이터 (일봉)", value: `${model.from} ~ ${model.date}` },
     ],
     zones: [
