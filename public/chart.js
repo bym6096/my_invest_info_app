@@ -119,15 +119,21 @@ export function createChart(meta) {
     }
     const W = Math.max(240, plot.clientWidth || root.clientWidth || 300);
     const H = W >= 560 ? 280 : 190; // 넓은 화면에서는 세로도 키워 추세가 잘 보이게
-    const m = { l: 36, r: 10, t: 10, b: 22 };
+    // logRatio: 값이 "기준 대비 %"일 때 배율(1 + v/100)의 로그 눈금으로 그린다 (버블기 +1000% 와 바닥 근처를 함께 보이게)
+    const logRatio = Boolean(data.logRatio);
+    const tf = logRatio ? (v) => Math.log10(Math.max(1 + v / 100, 1e-6)) : (v) => v;
+    const m = { l: logRatio ? 46 : 36, r: 10, t: 10, b: 22 };
     const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
     let lo = Infinity, hi = -Infinity;
-    for (const [, v] of pts) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    for (const [, v] of pts) { const u = tf(v); if (u < lo) lo = u; if (u > hi) hi = u; }
     const pad = (hi - lo || 1) * 0.08;
     lo -= pad; hi += pad;
     const x = (t) => m.l + ((t - t0) / (t1 - t0)) * (W - m.l - m.r);
-    const y = (v) => H - m.b - ((v - lo) / (hi - lo)) * (H - m.t - m.b);
+    const Y = (u) => H - m.b - ((u - lo) / (hi - lo)) * (H - m.t - m.b); // 변환된 값 → 화면 y
+    const y = (v) => Y(tf(v));
     const dec = data.decimals ?? 2;
+    const unit = data.unit ?? "";
+    const fmtV = (v) => `${unit === "%" && v > 0 ? "+" : ""}${v.toFixed(dec)}${unit}`;
 
     const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", tabindex: "0",
       "aria-label": `${meta.title} 추이, ${fmtDate(t0)}부터 ${fmtDate(t1)}까지` });
@@ -135,9 +141,10 @@ export function createChart(meta) {
 
     // 구간 색칠(과열/침체 등): 현재 보이는 범위와 겹칠 때만 그린다. 가장 아래에 깔리도록 먼저 추가.
     for (const bd of data.bands ?? []) {
-      const top = Math.min(bd.to ?? Infinity, hi), bottom = Math.max(bd.from ?? -Infinity, lo);
+      const top = Math.min(bd.to === undefined ? Infinity : tf(bd.to), hi);
+      const bottom = Math.max(bd.from === undefined ? -Infinity : tf(bd.from), lo);
       if (top <= bottom) continue;
-      const y0 = y(top), y1 = y(bottom);
+      const y0 = Y(top), y1 = Y(bottom);
       svg.append(svgEl("rect", { x: m.l, y: y0, width: W - m.l - m.r, height: y1 - y0, class: `band t-${bd.tone}` }));
       if (y1 - y0 >= 18) {
         const atTop = bd.from !== undefined; // 위쪽 구간은 위쪽 가장자리, 아래쪽 구간은 아래쪽 가장자리에 라벨
@@ -147,8 +154,22 @@ export function createChart(meta) {
       }
     }
 
-    const { ticks, step } = niceTicks(lo, hi);
-    const yFmt = (v) => v.toFixed(step < 1 ? (step < 0.5 ? 2 : 1) : 0);
+    let ticks, yFmt;
+    if (logRatio) {
+      // 눈금은 보기 좋은 % 값 중 범위 안에 드는 것. 0% 를 먼저 두고, 이미 둔 눈금과 16px 이상 떨어진 것만 더한다.
+      const nice = [0, -10, -25, -50, -75, -90, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+      ticks = [];
+      for (const v of nice) {
+        if (tf(v) <= lo || tf(v) >= hi) continue;
+        if (ticks.every((u) => Math.abs(y(u) - y(v)) >= 16)) ticks.push(v);
+      }
+      ticks.sort((a, b) => a - b);
+      yFmt = (v) => `${v > 0 ? "+" : ""}${v}%`;
+    } else {
+      const nt = niceTicks(lo, hi);
+      ticks = nt.ticks;
+      yFmt = (v) => v.toFixed(nt.step < 1 ? (nt.step < 0.5 ? 2 : 1) : 0);
+    }
     for (const v of ticks) {
       svg.append(svgEl("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: "grid" }));
       const t = svgEl("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end", class: "tick" });
@@ -157,11 +178,11 @@ export function createChart(meta) {
     }
     // 기준선(과열/침체 구간 경계 등): 표시 범위 안에 있을 때만
     for (const r of data.refs ?? []) {
-      if (r <= lo || r >= hi || ticks.includes(r)) continue;
+      if (tf(r) <= lo || tf(r) >= hi || ticks.includes(r)) continue;
       svg.append(svgEl("line", { x1: m.l, x2: W - m.r, y1: y(r), y2: y(r), class: "ref" }));
       if (ticks.some((v) => Math.abs(y(v) - y(r)) < 12)) continue; // 눈금 라벨과 겹치면 라벨 생략
       const t = svgEl("text", { x: m.l - 6, y: y(r) + 4, "text-anchor": "end", class: "tick" });
-      t.textContent = String(r);
+      t.textContent = logRatio ? yFmt(r) : String(r);
       svg.append(t);
     }
     const spanDays = (t1 - t0) / DAY;
@@ -190,7 +211,7 @@ export function createChart(meta) {
       const px = x(t), py = y(v);
       cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
       hover.setAttribute("cx", px); hover.setAttribute("cy", py); hover.setAttribute("visibility", "visible");
-      tipVal.textContent = v.toFixed(dec);
+      tipVal.textContent = fmtV(v);
       tipDate.textContent = fmtDate(t);
       tip.hidden = false;
       const w = tip.offsetWidth;
@@ -222,7 +243,7 @@ export function createChart(meta) {
     });
 
     plot.append(svg, tip);
-    const fmt = (v) => v.toFixed(dec);
+    const fmt = fmtV;
     const minV = Math.min(...pts.map((p) => p[1])), maxV = Math.max(...pts.map((p) => p[1]));
     stats.textContent = `구간 최저 ${fmt(minV)} · 최고 ${fmt(maxV)} · 현재 ${fmt(last[1])}`;
     const src = document.createElement("div");

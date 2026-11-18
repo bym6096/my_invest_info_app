@@ -65,7 +65,12 @@ export function computePowerLaw(pts) {
   // 바닥선 기준 잔차(오름차순): "이보다 낮았던 날" 비율을 이진 탐색으로 구한다
   const raw = Float64Array.from(pts, (p) => p.y - (floor.c + floor.k * p.x));
   const last = pts[pts.length - 1];
-  return { fits, residuals: raw.slice().sort(), ...belowRuns(pts, raw), from: pts[0].date, date: last.date, closePrice: 10 ** last.y };
+  // 그래프용: 날짜별 바닥선 대비 % (지금 회귀선으로 과거를 다시 그린 값)
+  const series = pts.map((p, i) => [Date.parse(`${p.date}T00:00:00Z`) / 1000, Math.round((10 ** raw[i] - 1) * 1000) / 10]);
+  return {
+    fits, residuals: raw.slice().sort(), ...belowRuns(pts, raw), series,
+    from: pts[0].date, date: last.date, closePrice: 10 ** last.y,
+  };
 }
 
 // 일봉 종가가 바닥선 아래에 연속으로 있었던 구간: 지금 진행 중인 구간(streak)과 역대 최장(longest)
@@ -140,11 +145,33 @@ export function streakText({ streak, longest }, liveBelow) {
   return `${liveBelow ? "오늘 이탈 (종가 미확정)" : "없음"}${rec}`;
 }
 
+const loadModelAndLive = () =>
+  Promise.all([cached("powerlaw", 60 * 60_000, loadPrices), cached("btc-usd-live", 60_000, livePrice)]);
+
+// 시계열: 일봉 종가의 바닥선 대비 %, 마지막에 실시간 점을 덧붙여 카드 값과 맞춘다
+export async function powerlawHistory() {
+  const [model, live] = await loadModelAndLive();
+  const points = [...model.series];
+  if (live) {
+    const x = xAt(live.at / 1000);
+    points.push([Math.floor(live.at / 1000), Math.round((live.price / 10 ** (model.fits.floor.c + model.fits.floor.k * x) - 1) * 1000) / 10]);
+  }
+  return {
+    id: "powerlaw",
+    decimals: 1,
+    unit: "%",
+    logRatio: true,
+    refs: [0],
+    bands: [{ to: 0, tone: "blue", label: "바닥선 아래" }],
+    points,
+    source: `CoinMetrics 일봉${live ? ` + ${live.source} 실시간` : ""}`,
+    note: "지금 회귀선으로 과거를 다시 그린 값",
+    stale: model.stale,
+  };
+}
+
 export async function powerlaw() {
-  const [model, live] = await Promise.all([
-    cached("powerlaw", 60 * 60_000, loadPrices),
-    cached("btc-usd-live", 60_000, livePrice),
-  ]);
+  const [model, live] = await loadModelAndLive();
   const at = live ? live.at : Date.parse(`${model.date}T00:00:00Z`);
   const r = positionAt(model, live ? live.price : model.closePrice, xAt(at / 1000));
   const rel = (line) => (line / r.floor - 1) * 100; // 구간 경계를 카드 값(바닥선 대비 %)의 단위로

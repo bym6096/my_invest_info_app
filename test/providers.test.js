@@ -84,7 +84,7 @@ test("공포탐욕 시계열: 오름차순 정렬, kimchi 는 시계열 없음",
 
 test("목록에 history 플래그 포함", () => {
   const m = Object.fromEntries(listIndicators().body.map((x) => [x.id, x.history]));
-  assert.deepEqual(m, { kimchi: false, mvrvz: true, fng: true, powerlaw: false });
+  assert.deepEqual(m, { kimchi: false, mvrvz: true, fng: true, powerlaw: true });
 });
 
 test("MVRV-Z 시계열은 2014-01-01부터만 표시", () => {
@@ -290,6 +290,13 @@ test("멱법칙 카드: CoinMetrics 가격으로 바닥선 대비 % 와 구간�
     assert.equal(r.body.zones[0].max, 0);
     assert.ok(r.body.zones.slice(1, -1).every((z, i, a) => i === 0 || z.max > a[i - 1].max));
     assert.match(r.headers["cache-control"], /s-maxage=60,/);
+    // 시계열: 일봉 점 + 마지막 실시간 점, 마지막 값은 카드 값과 같다
+    const h = await getHistory("powerlaw");
+    assert.equal(h.status, 200);
+    assert.equal(h.body.points.length, data.length + 1);
+    assert.ok(Math.abs(h.body.points.at(-1)[1] - r.body.value) < 0.06);
+    assert.equal(h.body.logRatio, true);
+    assert.match(h.headers["cache-control"], /s-maxage=300,/);
   } finally { restore(); }
 });
 
